@@ -12,7 +12,8 @@ import (
 )
 
 var (
-	BotToken = flag.String("token", "", "Bot Token")
+	BotToken       = flag.String("token", "", "Bot Token")
+	GeneralChannel = "522472817283956745"
 )
 
 func init() { flag.Parse() }
@@ -31,16 +32,19 @@ func main() {
 	}
 
 	dg.AddHandler(func(s *discordgo.Session, event *discordgo.Ready) {
-		s.ChannelMessageSend("522472817283956745", "FARTS WE GO IN")
+		s.ChannelMessageSend(GeneralChannel, "FARTS WE GO IN")
 	})
 	dg.AddHandler(messageCreate)
 
 	// Receive message events
-	// THIS IS DOGSHIT
 	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages
 
 	// Open websocket connection to discord
-	dg.Open()
+	err = dg.Open()
+	if err != nil {
+		fmt.Println("YOU RUINED IT: ", err)
+		return
+	}
 
 	// Wait for ctrl+c to close app
 	sc := make(chan os.Signal, 1)
