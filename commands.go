@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -44,6 +45,18 @@ var (
 				},
 			},
 		},
+		{
+			Name:        "add",
+			Description: "Add a game to the game list",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "name",
+					Description: "Name of the game to add",
+					Required:    true,
+				},
+			},
+		},
 	}
 
 	commandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
@@ -52,6 +65,7 @@ var (
 		"games": getGames,
 		"join":  joinGame,
 		"leave": leaveGame,
+		"add":   addGame,
 	}
 )
 
@@ -78,6 +92,16 @@ func sayBye(s *discordgo.Session, i *discordgo.InteractionCreate) {
 // print out list of games available
 func getGames(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	// TODO: retrieve list of registered games from db
+	if games == nil {
+		games = append(games, "No Games Being Played")
+	}
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: strings.Join(games, ", "),
+		},
+	})
 }
 
 // add user to group associated with specified game
@@ -106,6 +130,19 @@ func leaveGame(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Content: fmt.Sprintf("<@!%s> now hates anyone playing %s!", authorId, game),
+		},
+	})
+}
+
+// add a game to the game list
+func addGame(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	game := fmt.Sprintf("%v", i.ApplicationCommandData().Options[0].Value)
+
+	games = append(games, game)
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: fmt.Sprintf("%s added to game list.", game),
 		},
 	})
 }
