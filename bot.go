@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	BotToken         = flag.String("token", "", "Bot Token")
+	BotToken         = token
 	GeneralChannelID = "522472817283956745"
 	GuildID          = "522472816818520106"
 )
@@ -22,12 +22,12 @@ func init() { flag.Parse() }
 
 func main() {
 
-	if *BotToken == "" {
+	if BotToken == "" {
 		fmt.Println("Not token specified")
 		return
 	}
 
-	dg, err := discordgo.New("Bot " + *BotToken)
+	dg, err := discordgo.New("Bot " + BotToken)
 	if err != nil {
 		fmt.Println("YOU RUINED IT: ", err)
 		return
