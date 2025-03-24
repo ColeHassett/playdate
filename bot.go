@@ -23,7 +23,7 @@ func init() { flag.Parse() }
 func main() {
 
 	if BotToken == "" {
-		fmt.Println("Not token specified")
+		fmt.Println("No token specified")
 		return
 	}
 
@@ -40,7 +40,7 @@ func main() {
 	})
 
 	dg.AddHandler(func(s *discordgo.Session, event *discordgo.Ready) {
-		s.ChannelMessageSend(GeneralChannelID, "FARTS WE GO IN")
+		s.ChannelMessageSend(GeneralChannelID, "Let's Play!")
 	})
 
 	// Open websocket connection to discord
