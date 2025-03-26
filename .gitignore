@@ -1,2 +1,2 @@
-postgres/
+postgres/data
 secrets.go
