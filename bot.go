@@ -16,101 +16,63 @@ import (
 )
 
 var (
-	BotToken       = flag.String("token", "", "Bot Token")
-	GeneralChannel = "522472817283956745"
+	BotToken         = token
+	GeneralChannelID = "522472817283956745"
+	GuildID          = "522472816818520106"
 )
 
 func init() { flag.Parse() }
 
 func main() {
 
-	if *BotToken == "" {
-		fmt.Println("Not token specified")
+	if BotToken == "" {
+		fmt.Println("No token specified")
 		return
 	}
 
-	dg, err := discordgo.New("Bot " + *BotToken)
+	dg, err := discordgo.New("Bot " + BotToken)
 	if err != nil {
 		fmt.Println("YOU RUINED IT: ", err)
 		return
 	}
 
-	dg.AddHandler(func(s *discordgo.Session, event *discordgo.Ready) {
-		s.ChannelMessageSend(GeneralChannel, "FARTS WE GO IN")
+	dg.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		if h, ok := commandHandlers[i.ApplicationCommandData().Name]; ok {
+			h(s, i)
+		}
 	})
-	dg.AddHandler(messageCreate)
 
-	// Receive message events
-	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages
+	dg.AddHandler(func(s *discordgo.Session, event *discordgo.Ready) {
+		s.ChannelMessageSend(GeneralChannelID, "Let's Play!")
+	})
 
 	// Open websocket connection to discord
 	err = dg.Open()
 	if err != nil {
-		fmt.Println("YOU RUINED IT: ", err)
+		log.Fatalf("Failed to open connection: %v", err)
 		return
 	}
 
-	startAPI()
+	registeredCommands := make([]*discordgo.ApplicationCommand, len(commands))
+	for i, v := range commands {
+		cmd, err := dg.ApplicationCommandCreate(dg.State.User.ID, GuildID, v)
+		if err != nil {
+			log.Panicf("Cannot create [%v]: %v", v.Name, err)
+		}
+		registeredCommands[i] = cmd
+	}
 
 	// Wait for ctrl+c to close app
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
-	dg.Close()
 
-}
-
-func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
-	fmt.Println("MESSAGE: ", m.Content)
-	fmt.Println("AUTHOR: ", m.Author.ID)
-	fmt.Println("CHANNEL: ", m.ChannelID)
-	fmt.Println("GUILD?: ", m.GuildID)
-
-	if strings.HasPrefix(m.Content, "!groups") {
-		c, err := s.State.Channel(m.ChannelID)
+	for _, v := range registeredCommands {
+		err := dg.ApplicationCommandDelete(dg.State.User.ID, GuildID, v.ID)
 		if err != nil {
-			return
+			log.Panicf("Cannot delete [%v]: %v", v.Name, err)
 		}
-
-		resp, err := http.Get("http://localhost:8080/groups")
-		if err != nil {
-			log.Fatalln(err)
-			return
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			log.Fatalln(err)
-			return
-		}
-
-		groups := string(body)
-
-		s.ChannelMessageSend(c.ID, groups)
-
-	} else if strings.HasPrefix(m.Content, "!group") {
-		c, err := s.State.Channel(m.ChannelID)
-		if err != nil {
-			return
-		}
-
-		params := strings.Fields(m.Content)
-		id := params[1]
-
-		resp, err := http.Get("http://localhost:8080/group/" + id)
-		if err != nil {
-			log.Fatalln(err)
-			return
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			log.Fatalln(err)
-			return
-		}
-
-		group := string(body)
-
-		s.ChannelMessageSend(c.ID, group)
 	}
+
+	dg.Close()
 }
