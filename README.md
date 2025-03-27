@@ -1,6 +1,6 @@
 # PlayDate
 
-Schedule dates with your friends to play games. 🙂
+Schedule dates to play games with your friends. 🙂
 
 ## Running Locally
 
