@@ -1,21 +1,16 @@
 package main
 
 import (
-	"flag"
-	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
 )
 
 func main() {
-	banner, err := os.ReadFile("banner.txt")
+	banner, err := os.ReadFile("../media/banner.txt")
 	if err != nil {
 		log.Fatal("Failed to read banner text file. err=", err)
 	}

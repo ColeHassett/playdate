@@ -21,7 +21,7 @@ func init() {
 func newAppConfig() AppConfig {
 	discordAPIKey, present := os.LookupEnv("DISCORD_API_KEY")
 	if !present {
-		discordAPIKey = "fake-discord-api-key"
+		discordAPIKey = token
 	}
 	discordChannelID, present := os.LookupEnv("DISCORD_CHANNEL_ID")
 	if !present {
