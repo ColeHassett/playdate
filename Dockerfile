@@ -9,5 +9,6 @@ RUN CGO_ENABLED=0 go build -o /go/bin/app
 
 # Now copy it into our base image.
 FROM gcr.io/distroless/static-debian11
+COPY ./banner.txt /
 COPY --from=build /go/bin/app /
 CMD ["/app"]

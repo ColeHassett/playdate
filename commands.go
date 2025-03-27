@@ -59,7 +59,7 @@ var (
 		},
 	}
 
-	commandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
+	commandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate, player *Player){
 		"hi":    sayHello,
 		"bye":   sayBye,
 		"games": getGames,
@@ -69,33 +69,28 @@ var (
 	}
 )
 
-func sayHello(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	author := fmt.Sprintf("%v", i.Interaction.Member.User.ID)
+func sayHello(s *discordgo.Session, i *discordgo.InteractionCreate, player *Player) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("Hello <@!%s>!", author),
+			Content: fmt.Sprintf("Hello <@!%s>!", player.name),
 		},
 	})
 }
 
-func sayBye(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	author := fmt.Sprintf("%v", i.Interaction.Member.User.ID)
+func sayBye(s *discordgo.Session, i *discordgo.InteractionCreate, player *Player) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("Goodbye <@!%s>!", author),
+			Content: fmt.Sprintf("Goodbye <@!%s>!", player.name),
 		},
 	})
 }
 
 // print out list of games available
-func getGames(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func getGames(s *discordgo.Session, i *discordgo.InteractionCreate, player *Player) {
 	// TODO: retrieve list of registered games from db
-	if games == nil {
-		games = append(games, "No Games Being Played")
-	}
-
+	games := []string{"No games being played"}
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -105,8 +100,7 @@ func getGames(s *discordgo.Session, i *discordgo.InteractionCreate) {
 }
 
 // add user to group associated with specified game
-func joinGame(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	authorId := fmt.Sprintf("%v", i.Interaction.Member.User.ID)
+func joinGame(s *discordgo.Session, i *discordgo.InteractionCreate, player *Player) {
 	game := i.ApplicationCommandData().Options[0].Value
 
 	// TODO: add user to group for specified game in db
@@ -114,14 +108,13 @@ func joinGame(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("<@!%s> is signed up for %s!", authorId, game),
+			Content: fmt.Sprintf("<@!%s> is signed up for %s!", player.name, game),
 		},
 	})
 }
 
 // add user to group associated with specified game
-func leaveGame(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	authorId := fmt.Sprintf("%v", i.Interaction.Member.User.ID)
+func leaveGame(s *discordgo.Session, i *discordgo.InteractionCreate, player *Player) {
 	game := i.ApplicationCommandData().Options[0].Value
 
 	// TODO: remove user from group for specified game in db
@@ -129,20 +122,20 @@ func leaveGame(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("<@!%s> now hates anyone playing %s!", authorId, game),
+			Content: fmt.Sprintf("<@!%s> now hates anyone playing %s!", player.name, game),
 		},
 	})
 }
 
 // add a game to the game list
-func addGame(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func addGame(s *discordgo.Session, i *discordgo.InteractionCreate, player *Player) {
 	game := fmt.Sprintf("%v", i.ApplicationCommandData().Options[0].Value)
 
-	games = append(games, game)
+	games := []string{game}
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("%s added to game list.", game),
+			Content: fmt.Sprintf("%s added to game list games list. games=%v", game, games),
 		},
 	})
 }
