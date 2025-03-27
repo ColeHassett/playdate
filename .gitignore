@@ -1,2 +1,3 @@
 postgres/
 secrets.go
+.env
