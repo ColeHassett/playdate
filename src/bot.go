@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	banner, err := os.ReadFile("../banner.txt")
+	banner, err := os.ReadFile("../media/banner.txt")
 	if err != nil {
 		log.Fatal("Failed to read banner text file. err=", err)
 	}
