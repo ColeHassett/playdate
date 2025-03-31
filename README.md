@@ -1,4 +1,6 @@
-# LOGIIIIIIIIIIIIIIN
+# PlayDate
+
+Schedule dates to play games with your friends. 🙂
 
 ## Running Locally
 
