@@ -2,71 +2,10 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-)
-
-var (
-	commands = []*discordgo.ApplicationCommand{
-		{
-			Name:        "hi",
-			Description: "Say hello!",
-		},
-		{
-			Name:        "bye",
-			Description: "Say bye!",
-		},
-		{
-			Name:        "games",
-			Description: "See list of games",
-		},
-		{
-			Name:        "join",
-			Description: "Join a game to be notified when it's being played",
-			Options: []*discordgo.ApplicationCommandOption{
-				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "name",
-					Description: "Name of the game to join",
-					Required:    true,
-				},
-			},
-		},
-		{
-			Name:        "leave",
-			Description: "Leave the list of users linked to specified game",
-			Options: []*discordgo.ApplicationCommandOption{
-				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "name",
-					Description: "Name of the game to leave",
-					Required:    true,
-				},
-			},
-		},
-		{
-			Name:        "add",
-			Description: "Add a game to the game list",
-			Options: []*discordgo.ApplicationCommandOption{
-				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "name",
-					Description: "Name of the game to add",
-					Required:    true,
-				},
-			},
-		},
-	}
-
-	commandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate, player *Player){
-		"hi":    sayHello,
-		"bye":   sayBye,
-		"games": getGames,
-		"join":  joinGame,
-		"leave": leaveGame,
-		"add":   addGame,
-	}
 )
 
 func sayHello(s *discordgo.Session, i *discordgo.InteractionCreate, player *Player) {
@@ -138,4 +77,20 @@ func addGame(s *discordgo.Session, i *discordgo.InteractionCreate, player *Playe
 			Content: fmt.Sprintf("%s added to game list games list. games=%v", game, games),
 		},
 	})
+}
+
+func extractPlayerFromDiscord(i *discordgo.InteractionCreate) *Player {
+	if &i == nil || &i.Member == nil || &i.Member.User == nil {
+		log.Panicf("Received invalid discord interaction. interaction=%+v", i)
+	}
+	if strings.Compare(i.Member.User.ID, "") == 0 {
+		log.Panicf("Received empty string for discord user id. interaction=%+v", i)
+	}
+
+	// get or create new reference to the player
+	// TODO: Attempt to find given player in the database or save the new player to the database
+	player := Player{
+		name: i.Member.User.ID,
+	}
+	return &player
 }
