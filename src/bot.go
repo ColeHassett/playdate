@@ -72,7 +72,8 @@ var (
 )
 
 func main() {
-	banner, err := os.ReadFile("../media/banner.txt")
+	// note that this is path referenced from within the docker container
+	banner, err := os.ReadFile("banner.txt")
 	if err != nil {
 		log.Fatal("Failed to read banner text file. err=", err)
 	}
