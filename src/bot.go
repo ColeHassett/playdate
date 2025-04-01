@@ -9,8 +9,71 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+var (
+	commands = []*discordgo.ApplicationCommand{
+		{
+			Name:        "hi",
+			Description: "Say hello!",
+		},
+		{
+			Name:        "bye",
+			Description: "Say bye!",
+		},
+		{
+			Name:        "games",
+			Description: "See list of games",
+		},
+		{
+			Name:        "join",
+			Description: "Join a game to be notified when it's being played",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "name",
+					Description: "Name of the game to join",
+					Required:    true,
+				},
+			},
+		},
+		{
+			Name:        "leave",
+			Description: "Leave the list of users linked to specified game",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "name",
+					Description: "Name of the game to leave",
+					Required:    true,
+				},
+			},
+		},
+		{
+			Name:        "add",
+			Description: "Add a game to the game list",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "name",
+					Description: "Name of the game to add",
+					Required:    true,
+				},
+			},
+		},
+	}
+
+	commandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate, player *Player){
+		"hi":    sayHello,
+		"bye":   sayBye,
+		"games": getGames,
+		"join":  joinGame,
+		"leave": leaveGame,
+		"add":   addGame,
+	}
+)
+
 func main() {
-	banner, err := os.ReadFile("../media/banner.txt")
+	// note that this is path referenced from within the docker container
+	banner, err := os.ReadFile("banner.txt")
 	if err != nil {
 		log.Fatal("Failed to read banner text file. err=", err)
 	}
