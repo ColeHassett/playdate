@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/uptrace/bun"
 )
 
 var (
@@ -61,7 +62,7 @@ var (
 		},
 	}
 
-	commandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate, player *Player){
+	commandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate, botContext *BotContext){
 		"hi":    sayHello,
 		"bye":   sayBye,
 		"games": getGames,
@@ -71,24 +72,48 @@ var (
 	}
 )
 
-func main() {
-	// note that this is path referenced from within the docker container
-	banner, err := os.ReadFile("banner.txt")
-	if err != nil {
-		log.Fatal("Failed to read banner text file. err=", err)
-	}
-	log.Println(string(banner))
+type BotContext struct {
+	player *Player
+	db     *bun.DB
+}
 
+func createDiscordCommands(dg *discordgo.Session) ([]*discordgo.ApplicationCommand, error) {
+	registeredCommands := make([]*discordgo.ApplicationCommand, len(commands))
+	for i, v := range commands {
+		cmd, err := dg.ApplicationCommandCreate(dg.State.User.ID, Config.DiscordGuildID, v)
+		if err != nil {
+			return nil, err
+		}
+		registeredCommands[i] = cmd
+	}
+	return registeredCommands, nil
+}
+
+func deleteDiscordCommands(dg *discordgo.Session, registeredCommands []*discordgo.ApplicationCommand) error {
+	for _, v := range registeredCommands {
+		err := dg.ApplicationCommandDelete(dg.State.User.ID, Config.DiscordGuildID, v.ID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func createDiscordBot(errChan chan error, db *bun.DB) {
+	log.Println("Attempting to start Discord Bot.")
 	dg, err := discordgo.New("Bot " + Config.DiscordAPIKey)
 	if err != nil {
-		log.Panic("YOU RUINED IT: ", err)
-		return
+		errChan <- err
 	}
 
+	log.Println("Adding Bot handlers.")
 	dg.AddHandler(func(session *discordgo.Session, interaction *discordgo.InteractionCreate) {
 		if handler, ok := commandHandlers[interaction.ApplicationCommandData().Name]; ok {
-			player := extractPlayerFromDiscord(interaction)
-			handler(session, interaction, player)
+			botContext := &BotContext{
+				player: extractPlayerFromDiscord(interaction, db),
+				db:     db,
+			}
+			handler(session, interaction, botContext)
 		}
 	})
 
@@ -97,33 +122,32 @@ func main() {
 	})
 
 	// Open websocket connection to discord
+	log.Println("Opening websocket to Discord...")
 	err = dg.Open()
 	if err != nil {
-		log.Fatalf("Failed to open connection: %v", err)
-		return
+		errChan <- err
 	}
-
-	registeredCommands := make([]*discordgo.ApplicationCommand, len(commands))
-	for i, v := range commands {
-		cmd, err := dg.ApplicationCommandCreate(dg.State.User.ID, Config.DiscordGuildID, v)
-		if err != nil {
-			log.Panicf("Cannot create [%v]: %v", v.Name, err)
-		}
-		registeredCommands[i] = cmd
+	commands, err := createDiscordCommands(dg)
+	if err != nil {
+		errChan <- err
 	}
+	defer dg.Close()
+	defer deleteDiscordCommands(dg, commands)
 
 	// Wait for ctrl+c to close app
-	log.Println("Bot successfully started. Waiting for commands...")
+	log.Println("Started Discord Bot. Waiting on commands")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
 
-	for _, v := range registeredCommands {
-		err := dg.ApplicationCommandDelete(dg.State.User.ID, Config.DiscordGuildID, v.ID)
-		if err != nil {
-			log.Panicf("Cannot delete [%v]: %v", v.Name, err)
-		}
-	}
+	errChan <- nil
+}
 
-	dg.Close()
+func startDiscordBot(db *bun.DB) {
+	errorChan := make(chan error)
+	go createDiscordBot(errorChan, db)
+	errors := <-errorChan
+	if errors != nil {
+		log.Fatal(errors)
+	}
 }

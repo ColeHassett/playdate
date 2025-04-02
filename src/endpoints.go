@@ -1,43 +1,56 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/uptrace/bun"
 )
 
-type group struct {
-	ID      string   `json:"id"`
-	Name    string   `json:"name"`
-	Members []string `json:"members"`
-	Games   []string `json:"games"`
-}
+func startAPI(db *bun.DB) {
+	api := Api{db: db, ctx: context.Background()}
 
-var groups = []group{
-	{ID: "1", Name: "Group 1", Members: []string{"Member A", "Member B", "Member C"}, Games: []string{"Fortnite", "Roblox", "Elden Ring", "Cornhole"}},
-}
-
-func startAPI() {
 	router := gin.Default()
-	router.GET("/groups", getGroups)
-	router.GET("/group/:id", getGroupById)
-
+	router.GET("/player", api.getPlayers)
+	router.POST("/player", api.createPlayer)
 	router.Run("localhost:8080")
 }
 
-func getGroups(c *gin.Context) {
-	c.IndentedJSON(http.StatusOK, groups)
+type Api struct {
+	db  *bun.DB
+	ctx context.Context
 }
 
-func getGroupById(c *gin.Context) {
-	id := c.Param("id")
-
-	for _, g := range groups {
-		if g.ID == id {
-			c.IndentedJSON(http.StatusOK, g)
-			return
-		}
+func (a *Api) getPlayers(c *gin.Context) {
+	var players []Player
+	err := a.db.NewSelect().Model(&players).Scan(a.ctx)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
 	}
-	c.IndentedJSON(http.StatusNotFound, gin.H{"message": fmt.Sprintf("Group with ID %s not found", id)})
+	c.JSON(http.StatusOK, gin.H{
+		"message": players,
+	})
+}
+
+func (a *Api) createPlayer(c *gin.Context) {
+	var json Player
+	err := c.ShouldBindJSON(&json)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	_, err = a.db.NewInsert().Model(&json).Exec(a.ctx)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{})
 }
