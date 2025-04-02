@@ -5,12 +5,17 @@ import (
 	"os"
 )
 
-var Config AppConfig
+var Config *AppConfig
 
 type AppConfig struct {
 	DiscordAPIKey    string
 	DiscordChannelID string
 	DiscordGuildID   string
+	PostgresHost     string
+	PostgresPort     string
+	PostgresDatabase string
+	PostgresUser     string
+	PostgresPassword string
 }
 
 func init() {
@@ -18,22 +23,24 @@ func init() {
 	log.Printf("Created global AppConfig. Config=%+v\n", Config)
 }
 
-func newAppConfig() AppConfig {
-	discordAPIKey, present := os.LookupEnv("DISCORD_API_KEY")
+func getOrDefault(name string, defaultValue string) string {
+	value, present := os.LookupEnv(name)
 	if !present {
-		discordAPIKey = "fake-discord-api-key"
+		return defaultValue
 	}
-	discordChannelID, present := os.LookupEnv("DISCORD_CHANNEL_ID")
-	if !present {
-		discordChannelID = ""
+	return value
+}
+
+func newAppConfig() *AppConfig {
+	config := &AppConfig{
+		DiscordAPIKey:    getOrDefault("DISCORD_API_KEY", "fake-discord-api-key"),
+		DiscordChannelID: getOrDefault("DISCORD_CHANNEL_ID", ""),
+		DiscordGuildID:   getOrDefault("DISCORD_GUILD_ID", ""),
+		PostgresHost:     getOrDefault("POSTGRES_HOST", "postgres"),
+		PostgresPort:     getOrDefault("POSTGRES_PORT", "5432"),
+		PostgresDatabase: getOrDefault("POSTGRES_DATABASE", "postgres"),
+		PostgresUser:     getOrDefault("POSTGRES_USER", "postgres"),
+		PostgresPassword: getOrDefault("POSTGRES_PASSWORD", "postgres"),
 	}
-	discordGuildID, present := os.LookupEnv("DISCORD_GUILD_ID")
-	if !present {
-		discordGuildID = ""
-	}
-	return AppConfig{
-		DiscordAPIKey:    discordAPIKey,
-		DiscordChannelID: discordChannelID,
-		DiscordGuildID:   discordGuildID,
-	}
+	return config
 }
