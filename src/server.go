@@ -30,6 +30,6 @@ func main() {
 	}
 	log.Println("Connected to PostgreSQL successfully!")
 
-	go startAPI(db)     // start webserver on subprocess
-	startDiscordBot(db) // start discord bot on main process
+	startAPI(db) // start webserver on subprocess
+	// startDiscordBot(db) // start discord bot on main process
 }

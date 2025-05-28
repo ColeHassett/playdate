@@ -38,7 +38,7 @@ func newAppConfig() *AppConfig {
 		DiscordGuildID:   getOrDefault("DISCORD_GUILD_ID", ""),
 		PostgresHost:     getOrDefault("POSTGRES_HOST", "postgres"),
 		PostgresPort:     getOrDefault("POSTGRES_PORT", "5432"),
-		PostgresDatabase: getOrDefault("POSTGRES_DATABASE", "postgres"),
+		PostgresDatabase: getOrDefault("POSTGRES_DB", "postgres"),
 		PostgresUser:     getOrDefault("POSTGRES_USER", "postgres"),
 		PostgresPassword: getOrDefault("POSTGRES_PASSWORD", "postgres"),
 	}
