@@ -2,22 +2,28 @@
 
 Schedule dates to play games with your friends. 🙂
 
+## Dependencies
+* go
+* docker or podman
+* [just](https://github.com/casey/just?tab=readme-ov-file#installation)
+
 ## Running Locally
 
-Right now to run the application you can use docker. To just use docker do the following
+Copy the `.env` file and replace the environment variables with new defaults or just keep the defaults
 
 ```shell
-docker build -t playdate .
-docker run --rm playdate
+cp .env.example .env
 ```
 
-You can also use docker-compose instead which will be useful once the postgres connection is required when running locally
+To run locally start the postgres instance:
+```shell
+docker-compose up postgres
+```
 
+This should start a local instance of postgres available at `localhost:5432`. Note it is configured with the environment variables from your local `.env`.
+
+Finally start the app using just
 ```shell
-docker-compose up
+just
 ```
-OR
-If you are unfornately using the plugin version :painchamp:
-```shell
-docker compose up
-```
+

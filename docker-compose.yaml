@@ -24,6 +24,7 @@ services:
     ports:
       - 5432:5432
     volumes:
+      # uncomment to enable persisting database across restarts
       # - ./postgres:/var/lib/postgresql/data
       - ./postgres/entrypoint/init.sql:/docker-entrypoint-initdb.d/init.sql:ro,z
     healthcheck:
