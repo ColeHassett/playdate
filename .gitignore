@@ -1,3 +1,4 @@
 postgres/data
-secrets.go
 .env
+tmp/
+just.exe
