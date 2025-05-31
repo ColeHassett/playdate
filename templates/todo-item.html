@@ -1,6 +1,9 @@
 {{ define "todo-item.html" }}
-<li id="todo-{{ .ID }}">
-    <span>{{ .Text }}</span>
-    <button hx-delete="/todos/{{ .ID }}" hx-target="#todo-{{ .ID }}" hx-swap="outerHTML">Delete</button>
+<li id="todo-{{ .ID }}" class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-md shadow-sm">
+    <span class="text-gray-800 text-lg">{{ .Text }}</span>
+    <button hx-delete="/todos/{{ .ID }}" hx-target="#todo-{{ .ID }}" hx-swap="outerHTML"
+            class="ml-4 px-4 py-2 bg-red-500 text-white font-semibold rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+        Delete
+    </button>
 </li>
 {{ end }}

@@ -1,12 +1,14 @@
-package main
+package internal
 
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"sync"
 	"text/template"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -24,21 +26,17 @@ var (
 	todosMux = sync.Mutex{} // Mutex for concurrent access to todos slice
 )
 
-func startAPI(db *bun.DB) {
+func StartAPI(db *bun.DB) {
 	api := Api{db: db, ctx: context.Background()}
 
 	router := gin.Default()
 
 	// Template Endpoints
-	router.LoadHTMLGlob("templates/*")
+	router.LoadHTMLGlob(fmt.Sprintf("%s/*", Config.TemplateDirectory))
 	// Render the initial page
-	router.GET("/", func(c *gin.Context) {
-		todosMux.Lock()
-		defer todosMux.Unlock()
-		c.HTML(http.StatusOK, "index.html", gin.H{
-			"Todos": todos,
-		})
-	})
+	router.GET("/", api.index)
+	router.POST("/player", api.createPlayersTemplate)
+	router.POST("/playdate", api.createPlayDateTemplate)
 
 	// Handle adding a new todo (HTMX POST request)
 	router.POST("/todos", func(c *gin.Context) {
@@ -56,7 +54,7 @@ func startAPI(db *bun.DB) {
 
 		// Render only the new todo item as a partial HTML response
 		// This HTML will be inserted by HTMX into the #todo-list
-		tmpl := template.Must(template.ParseFiles("templates/todo-item.html"))
+		tmpl := template.Must(template.ParseFiles(fmt.Sprintf("%s/todo-item.html", Config.TemplateDirectory)))
 		err := tmpl.ExecuteTemplate(c.Writer, "todo-item.html", newTodo)
 		if err != nil {
 			fmt.Printf("Error rendering todo-item: %v\n", err)
@@ -117,6 +115,106 @@ func startAPI(db *bun.DB) {
 type Api struct {
 	db  *bun.DB
 	ctx context.Context
+}
+
+func (a *Api) index(c *gin.Context) {
+	todosMux.Lock()
+	defer todosMux.Unlock()
+
+	// retrieve players for initial rendering
+	var players []Player
+	err := a.db.NewSelect().Model(&players).Scan(a.ctx)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	var playdates []PlayDate
+	err = a.db.NewSelect().Model(&playdates).Scan(a.ctx)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.HTML(http.StatusOK, "index.html", gin.H{
+		"Todos":     todos,
+		"Players":   players,
+		"PlayDates": playdates,
+	})
+}
+
+func (a *Api) createPlayersTemplate(c *gin.Context) {
+	playerName := c.PostForm("name")
+	if playerName == "" {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+
+	player := Player{Name: playerName}
+	_, err := a.db.NewInsert().Model(&player).Exec(a.ctx)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	// Render only the new todo item as a partial HTML response
+	// This HTML will be inserted by HTMX into the #todo-list
+	tmpl := template.Must(template.ParseFiles(fmt.Sprintf("%s/player-item.html", Config.TemplateDirectory)))
+	err = tmpl.ExecuteTemplate(c.Writer, "player-item.html", player)
+	if err != nil {
+		fmt.Printf("Error rendering player-item: %v\n", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+}
+
+func (a *Api) createPlayDateTemplate(c *gin.Context) {
+	inputGame := c.PostForm("game")
+	inputDatetime := c.PostForm("datetime")
+	log.Default().Println(inputGame, inputDatetime)
+	if inputGame == "" {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+	if inputDatetime == "" {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+
+	// NOTE: that this date is not random but instead hardcoded into the standard
+	// libary to code layouts against.
+	expectedTimeLayout := "2006-01-02T15:04"
+	parsedDatetime, err := time.Parse(expectedTimeLayout, inputDatetime)
+	if err != nil {
+		fmt.Print(err)
+		c.Status(http.StatusBadRequest)
+		return
+	}
+	log.Default().Println(parsedDatetime)
+
+	playdate := PlayDate{Game: inputGame, Date: parsedDatetime}
+	_, err = a.db.NewInsert().Model(&playdate).Exec(a.ctx)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	// Render only the new todo item as a partial HTML response
+	// This HTML will be inserted by HTMX into the #todo-list
+	tmpl := template.Must(template.ParseFiles(fmt.Sprintf("%s/playdate-item.html", Config.TemplateDirectory)))
+	err = tmpl.ExecuteTemplate(c.Writer, "playdate-item.html", playdate)
+	if err != nil {
+		fmt.Printf("Error rendering playdate-item: %v\n", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
 }
 
 func (a *Api) getPlayers(c *gin.Context) {
