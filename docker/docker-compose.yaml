@@ -1,43 +1,36 @@
 services:
   playdate:
     image: playdate
-    build: ./
+    build:
+      context: ../
+      dockerfile: docker/local.dockerfile
     ports:
-      - "8080:8080"
+      - 8080:8080
+    volumes:
+      - ../:/app
     env_file:
-      - .env
+      - ../.env
     depends_on:
       postgres:
         condition: service_healthy
         restart: true
-    develop:
-      watch:
-        - action: rebuild
-          path: .
   postgres:
     image: postgres
     restart: always
     # set shared memory limit when using docker-compose
     shm_size: 128mb
     env_file:
-      - .env
+      - ../.env
     ports:
       - 5432:5432
+    # uncomment to enable persisting database across restarts
     # volumes:
-      # uncomment to enable persisting database across restarts
-      # - ./postgres:/var/lib/postgresql/data
-      # - ./postgres/entrypoint/init.sql:/docker-entrypoint-initdb.d/init.sql:ro,z
+    #   - ./postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready"]
       interval: 10s
       timeout: 5s
       retries: 5
-
-  adminer:
-    image: adminer
-    restart: always
-    ports:
-      - 8081:8080
 
 # volumes:
 #   postgres: 
