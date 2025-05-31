@@ -3,7 +3,7 @@ set dotenv-load
 default: dev
 
 fmt:
-	go fmt ./src
+	go fmt .
 
 dev: fmt
-	go run ./src
+	air
