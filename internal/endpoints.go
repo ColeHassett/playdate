@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -37,6 +38,7 @@ func StartAPI(db *bun.DB) {
 	router.GET("/", api.index)
 	router.POST("/player", api.createPlayersTemplate)
 	router.POST("/playdate", api.createPlayDateTemplate)
+	router.POST("/register", api.registerUserTemplate)
 
 	// API Endpoints
 	v1 := router.Group("/api/v1")
@@ -154,6 +156,43 @@ func (a *Api) createPlayDateTemplate(c *gin.Context) {
 	// This HTML will be inserted by HTMX into the #todo-list
 	tmpl := template.Must(template.ParseFiles(fmt.Sprintf("%s/playdate-item.html", Config.TemplateDirectory)))
 	err = tmpl.ExecuteTemplate(c.Writer, "playdate-item.html", playdate)
+	if err != nil {
+		fmt.Printf("Error rendering playdate-item: %v\n", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+}
+
+func (a *Api) registerUserTemplate(c *gin.Context) {
+	name := c.PostForm("name")
+	discID := c.PostForm("discID")
+
+	if name == "" {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+	if discID == "" {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+
+	player := Player{Name: name, DiscordID: discID}
+	err := a.db.NewSelect().Model(&player).Where("discord_id = ?", player.DiscordID).Scan(a.ctx)
+	if err != nil {
+		_, err := a.db.NewInsert().Model(&player).Exec(a.ctx)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+	}
+
+	val, _ := json.Marshal(player)
+	c.SetCookie("playdate", string(val), 0, "/", "", false, true)
+
+	tmpl := template.Must(template.ParseFiles(fmt.Sprintf("%s/login.html", Config.TemplateDirectory)))
+	err = tmpl.ExecuteTemplate(c.Writer, "login.html", nil)
 	if err != nil {
 		fmt.Printf("Error rendering playdate-item: %v\n", err)
 		c.Status(http.StatusInternalServerError)
