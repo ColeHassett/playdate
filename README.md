@@ -2,10 +2,13 @@
 
 Schedule dates to play games with your friends. 🙂
 
+# Contributing
+
 ## Dependencies
 * go
 * docker or podman
-* [just](https://github.com/casey/just?tab=readme-ov-file#installation)
+* equivalent compose runner
+* _optional_: [just](https://github.com/casey/just?tab=readme-ov-file#installation)
 
 ## Running Locally
 
@@ -15,14 +18,16 @@ Copy the `.env` file and replace the environment variables with new defaults or 
 cp .env.example .env
 ```
 
-To run locally start the postgres instance:
+To run locally start using the provider docker compose
 ```shell
-docker-compose up postgres
+docker-compose up --build
 ```
 
-This should start a local instance of postgres available at `localhost:5432`. Note it is configured with the environment variables from your local `.env`.
+The http server will be available at `localhost:8080`.
 
-Finally start the app using just
+And thats it! Now you can change files locally and your go http server will live reload based on them without having to restart your docker compose command or rebuilding your entire docker image.
+
+**Note** if you are lazy like you can use just instead of all of that typing
 ```shell
 just
 ```
