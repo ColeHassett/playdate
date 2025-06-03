@@ -1,4 +1,4 @@
 postgres/data
 .env
-.air.toml
+just.exe
 tmp/
