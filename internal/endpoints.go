@@ -6,24 +6,11 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"sync"
 	"text/template"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
-)
-
-type Todo struct {
-	ID   int
-	Text string
-}
-
-// Global variable to simulate a database for simplicity
-var (
-	todos    = []Todo{}
-	nextID   = 1
-	todosMux = sync.Mutex{} // Mutex for concurrent access to todos slice
 )
 
 func StartAPI(db *bun.DB) {
@@ -33,66 +20,19 @@ func StartAPI(db *bun.DB) {
 
 	// Template Endpoints
 	router.LoadHTMLGlob(fmt.Sprintf("%s/*", Config.TemplateDirectory))
+	// router.Static("static/", "/app/static/")
+	router.StaticFile("service-worker.js", "./static/service-worker.js")
 	// Render the initial page
 	router.GET("/", api.index)
 	router.POST("/player", api.createPlayersTemplate)
 	router.POST("/playdate", api.createPlayDateTemplate)
 
-	// Handle adding a new todo (HTMX POST request)
-	router.POST("/todos", func(c *gin.Context) {
-		newTodoText := c.PostForm("newTodo")
-		if newTodoText == "" {
-			c.Status(http.StatusBadRequest)
-			return
-		}
-
-		todosMux.Lock()
-		newTodo := Todo{ID: nextID, Text: newTodoText}
-		todos = append(todos, newTodo)
-		nextID++
-		todosMux.Unlock()
-
-		// Render only the new todo item as a partial HTML response
-		// This HTML will be inserted by HTMX into the #todo-list
-		tmpl := template.Must(template.ParseFiles(fmt.Sprintf("%s/todo-item.html", Config.TemplateDirectory)))
-		err := tmpl.ExecuteTemplate(c.Writer, "todo-item.html", newTodo)
-		if err != nil {
-			fmt.Printf("Error rendering todo-item: %v\n", err)
-			c.Status(http.StatusInternalServerError)
-			return
-		}
-	})
-
-	// Handle deleting a todo (HTMX DELETE request)
-	router.DELETE("/todos/:id", func(c *gin.Context) {
-		idParam := c.Param("id")
-		id, err := strconv.Atoi(idParam)
-		if err != nil {
-			c.Status(http.StatusBadRequest)
-			return
-		}
-
-		todosMux.Lock()
-		defer todosMux.Unlock()
-
-		found := false
-		for i, todo := range todos {
-			if todo.ID == id {
-				todos = append(todos[:i], todos[i+1:]...) // Remove the todo
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			c.Status(http.StatusNotFound)
-			return
-		}
-
-		// HTMX expects an empty response (or a specific HTML if you want to replace it with something else)
-		// for `outerHTML` swap to remove the element.
-		c.Status(http.StatusOK) // Or http.StatusNoContent (204)
-	})
+	// Browser Notifications
+	// TODO: This would live in their own package for sure
+	router.GET("/get-keys", GenerateKeys)
+	router.POST("/subscribe", SubscribeHandler)
+	// router.GET("/send-notification", TestPush)
+	router.GET("/send-notification", SendNotificationHandler)
 
 	// API Endpoints
 	v1 := router.Group("/api/v1")
@@ -109,7 +49,7 @@ func StartAPI(db *bun.DB) {
 	v1.PATCH("/playdate/:id", api.updatePlayDate)
 	v1.DELETE("/playdate/:id", api.deletePlayDate)
 
-	router.Run()
+	router.Run("0.0.0.0:8080")
 }
 
 type Api struct {
@@ -118,9 +58,6 @@ type Api struct {
 }
 
 func (a *Api) index(c *gin.Context) {
-	todosMux.Lock()
-	defer todosMux.Unlock()
-
 	// retrieve players for initial rendering
 	var players []Player
 	err := a.db.NewSelect().Model(&players).Scan(a.ctx)
@@ -140,7 +77,6 @@ func (a *Api) index(c *gin.Context) {
 	}
 
 	c.HTML(http.StatusOK, "index.html", gin.H{
-		"Todos":     todos,
 		"Players":   players,
 		"PlayDates": playdates,
 	})
