@@ -7,24 +7,11 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"sync"
 	"text/template"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
-)
-
-type Todo struct {
-	ID   int
-	Text string
-}
-
-// Global variable to simulate a database for simplicity
-var (
-	todos    = []Todo{}
-	nextID   = 1
-	todosMux = sync.Mutex{} // Mutex for concurrent access to todos slice
 )
 
 func StartAPI(db *bun.DB) {
@@ -34,11 +21,13 @@ func StartAPI(db *bun.DB) {
 
 	// Template Endpoints
 	router.LoadHTMLGlob(fmt.Sprintf("%s/*", Config.TemplateDirectory))
-	// Render the initial page
+	router.StaticFile("custom-colors.css", fmt.Sprintf("%s/custom-colors.css", Config.TemplateDirectory))
+	// Templated endpoints
 	router.GET("/", api.index)
-	router.POST("/player", api.createPlayersTemplate)
-	router.POST("/playdate", api.createPlayDateTemplate)
+	router.GET("/home", api.home)
 	router.POST("/register", api.registerUserTemplate)
+	router.GET("/playdate", api.showPlayDateForm)
+	router.POST("/playdate", api.createPlayDateTemplate)
 
 	// API Endpoints
 	v1 := router.Group("/api/v1")
@@ -58,49 +47,58 @@ func StartAPI(db *bun.DB) {
 	router.Run()
 }
 
+func renderPartialHtml(c *gin.Context, filepath string, state any) {
+	tmpl := template.Must(template.ParseFiles(fmt.Sprintf("%s/%s", Config.TemplateDirectory, filepath)))
+	err := tmpl.ExecuteTemplate(c.Writer, filepath, state)
+	if err != nil {
+		fmt.Printf("Error rendering %s: %v\n", filepath, err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+}
+
 type Api struct {
 	db  *bun.DB
 	ctx context.Context
 }
 
 func (a *Api) index(c *gin.Context) {
-	todosMux.Lock()
-	defer todosMux.Unlock()
-
-	// retrieve players for initial rendering
-	var players []Player
-	err := a.db.NewSelect().Model(&players).Scan(a.ctx)
+	cookie, _ := c.Cookie("playdate")
+	type IndexState struct {
+		SignedUp  bool
+		PlayDates []*PlayDate
+	}
+	state := &IndexState{}
+	if cookie == "" {
+		c.HTML(http.StatusOK, "index.html", state)
+		return
+	}
+	// extra processing
+	state.SignedUp = true
+	state.PlayDates = []*PlayDate{}
+	err := a.db.NewSelect().Model(&state.PlayDates).Scan(a.ctx)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
-	var playdates []PlayDate
-	err = a.db.NewSelect().Model(&playdates).Scan(a.ctx)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
+	log.Println(state)
 
-	c.HTML(http.StatusOK, "index.html", gin.H{
-		"Todos":     todos,
-		"Players":   players,
-		"PlayDates": playdates,
-	})
+	c.HTML(http.StatusOK, "index.html", state)
 }
 
-func (a *Api) createPlayersTemplate(c *gin.Context) {
-	playerName := c.PostForm("name")
-	if playerName == "" {
-		c.Status(http.StatusBadRequest)
-		return
+func (a *Api) showPlayDateForm(c *gin.Context) {
+	c.HTML(http.StatusOK, "playdate-form.html", gin.H{})
+}
+
+func (a *Api) home(c *gin.Context) {
+	type HomeState struct {
+		Playdates []PlayDate
 	}
 
-	player := Player{Name: playerName}
-	_, err := a.db.NewInsert().Model(&player).Exec(a.ctx)
+	state := &HomeState{Playdates: []PlayDate{}}
+	err := a.db.NewSelect().Model(&state.Playdates).Scan(a.ctx)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
@@ -108,40 +106,36 @@ func (a *Api) createPlayersTemplate(c *gin.Context) {
 		return
 	}
 
-	// Render only the new todo item as a partial HTML response
-	// This HTML will be inserted by HTMX into the #todo-list
-	tmpl := template.Must(template.ParseFiles(fmt.Sprintf("%s/player-item.html", Config.TemplateDirectory)))
-	err = tmpl.ExecuteTemplate(c.Writer, "player-item.html", player)
-	if err != nil {
-		fmt.Printf("Error rendering player-item: %v\n", err)
-		c.Status(http.StatusInternalServerError)
-		return
-	}
+	renderPartialHtml(c, "home.html", state)
 }
 
 func (a *Api) createPlayDateTemplate(c *gin.Context) {
 	inputGame := c.PostForm("game")
-	inputDatetime := c.PostForm("datetime")
-	log.Default().Println(inputGame, inputDatetime)
+	inputDatetime := c.PostForm("date")
+
+	type FormData struct {
+		Game   string
+		Date   string
+		Errors map[string]string
+	}
+	formData := &FormData{Game: inputGame, Date: inputDatetime, Errors: make(map[string]string)}
 	if inputGame == "" {
-		c.Status(http.StatusBadRequest)
-		return
+		formData.Errors["game"] = "game is required"
 	}
 	if inputDatetime == "" {
-		c.Status(http.StatusBadRequest)
-		return
+		formData.Errors["date"] = "date is required"
 	}
-
 	// NOTE: that this date is not random but instead hardcoded into the standard
 	// libary to code layouts against.
 	expectedTimeLayout := "2006-01-02T15:04"
 	parsedDatetime, err := time.Parse(expectedTimeLayout, inputDatetime)
 	if err != nil {
-		fmt.Print(err)
-		c.Status(http.StatusBadRequest)
+		formData.Errors["date"] = "invalid format for date/time, please use layout 2025-01-01T12:00"
+	}
+	if len(formData.Errors) > 0 {
+		renderPartialHtml(c, "playdate-form.html", formData)
 		return
 	}
-	log.Default().Println(parsedDatetime)
 
 	playdate := PlayDate{Game: inputGame, Date: parsedDatetime}
 	_, err = a.db.NewInsert().Model(&playdate).Exec(a.ctx)
@@ -152,27 +146,27 @@ func (a *Api) createPlayDateTemplate(c *gin.Context) {
 		return
 	}
 
-	// Render only the new todo item as a partial HTML response
-	// This HTML will be inserted by HTMX into the #todo-list
-	tmpl := template.Must(template.ParseFiles(fmt.Sprintf("%s/playdate-item.html", Config.TemplateDirectory)))
-	err = tmpl.ExecuteTemplate(c.Writer, "playdate-item.html", playdate)
-	if err != nil {
-		fmt.Printf("Error rendering playdate-item: %v\n", err)
-		c.Status(http.StatusInternalServerError)
-		return
-	}
+	c.Header("HX-Location", "/")
 }
 
 func (a *Api) registerUserTemplate(c *gin.Context) {
 	name := c.PostForm("name")
 	discID := c.PostForm("discID")
 
+	type FormData struct {
+		Name   string
+		DiscID string
+		Errors map[string]string
+	}
+	formData := &FormData{Name: name, DiscID: discID, Errors: make(map[string]string)}
 	if name == "" {
-		c.Status(http.StatusBadRequest)
-		return
+		formData.Errors["name"] = "name is required"
 	}
 	if discID == "" {
-		c.Status(http.StatusBadRequest)
+		formData.Errors["discID"] = "discID is required"
+	}
+	if len(formData.Errors) > 0 {
+		renderPartialHtml(c, "register.html", formData)
 		return
 	}
 
@@ -190,14 +184,9 @@ func (a *Api) registerUserTemplate(c *gin.Context) {
 
 	val, _ := json.Marshal(player)
 	c.SetCookie("playdate", string(val), 0, "/", "", false, true)
-
-	tmpl := template.Must(template.ParseFiles(fmt.Sprintf("%s/login.html", Config.TemplateDirectory)))
-	err = tmpl.ExecuteTemplate(c.Writer, "login.html", nil)
-	if err != nil {
-		fmt.Printf("Error rendering playdate-item: %v\n", err)
-		c.Status(http.StatusInternalServerError)
-		return
-	}
+	c.Status(http.StatusCreated)
+	c.Header("HX-Location", "/")
+	// renderPartialHtml(c, "home.html", nil)
 }
 
 func (a *Api) getPlayers(c *gin.Context) {
