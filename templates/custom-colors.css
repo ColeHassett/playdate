@@ -1,0 +1,46 @@
+/* css/playdate-colors.css */
+
+:root {
+    /* Define your custom colors as CSS variables */
+    --playdate-coral: #FFB3A7;
+    --playdate-turquoise: #4ECDC4;
+    --playdate-yellow: #FFE66D;
+    --playdate-light-grey: #F7F7F7;
+    --playdate-dark-grey: #6A6A6A;
+
+    /* Override Bootstrap's default colors using your custom colors */
+    --bs-primary: var(--playdate-coral);         /* Light Coral for primary actions */
+    --bs-secondary: var(--playdate-turquoise);   /* Medium Turquoise for secondary elements */
+    --bs-info: var(--playdate-yellow);           /* Vivid Yellow for info/highlights (using 'info' as a good fit) */
+    --bs-light: var(--playdate-light-grey);     /* Very Light Grey for light backgrounds */
+    --bs-dark: var(--playdate-dark-grey);       /* Medium Dark Grey for dark text */
+
+    /* Define RGB values for color-contrast-related utilities (e.g., text-bg-primary) */
+    --bs-primary-rgb: 255, 179, 167; /* RGB for Light Coral */
+    --bs-secondary-rgb: 78, 205, 196; /* RGB for Medium Turquoise */
+    --bs-info-rgb: 255, 230, 109; /* RGB for Vivid Yellow */
+    --bs-light-rgb: 247, 247, 247; /* RGB for Very Light Grey */
+    --bs-dark-rgb: 106, 106, 106; /* RGB for Medium Dark Grey */
+}
+
+/* Optional: Adjust text colors on colored backgrounds for better contrast */
+/* For light coral background, use dark text */
+.text-bg-primary {
+    color: var(--playdate-dark-grey) !important;
+}
+
+/* For medium turquoise background, use dark text */
+.text-bg-secondary {
+    color: var(--playdate-dark-grey) !important;
+}
+
+/* For vivid yellow background, use dark text */
+.text-bg-info {
+    color: var(--playdate-dark-grey) !important;
+}
+
+/* Set default body background and text color */
+body {
+    background-color: var(--playdate-light-grey);
+    color: var(--playdate-dark-grey);
+}

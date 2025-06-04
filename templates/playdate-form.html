@@ -1,45 +1,45 @@
-<div id="registration">
-  <h3 class="">Register/Sign-in</h3>
+<div id="create-playdate">
+  <h3 class="">Create PlayDate</h3>
   <form
     class="{{- if .Errors -}}
       was-validated
     {{- else -}}
       needs-validated
     {{- end -}}"
-    hx-post="/register"
+    hx-post="/playdate"
     hx-swap="outerHTML"
-    hx-target="#registration"
+    hx-target="#create-playdate"
     novalidate
   >
     <div class="mb-3">
-      <label class="form-label" for="name">Name</label>
+      <label class="form-label" for="game">Game</label>
       <input
         class="form-control"
         type="text"
-        name="name"
-        value="{{ .Name }}"
+        name="game"
+        value="{{ .Game }}"
         required
       />
       {{- if .Errors }}
-        {{- if index .Errors "name" }}
-          <div class="invalid-feedback">{{ index .Errors "name" }}</div>
+        {{- if index .Errors "game" }}
+          <div class="invalid-feedback">{{ index .Errors "game" }}</div>
         {{- else }}
           <div class="valid-feedback"></div>
         {{- end }}
       {{- end }}
     </div>
     <div class="mb-3">
-      <label class="form-label" for="discID">Discord ID</label>
+      <label class="form-label" for="date">Date/Time</label>
       <input
         class="form-control"
-        type="text"
-        name="discID"
-        value="{{ .DiscID }}"
+        type="datetime-local"
+        name="date"
+        value="{{ .Date }}"
         required
       />
       {{- if .Errors }}
-        {{- if index .Errors "discID" }}
-          <div class="invalid-feedback">{{ index .Errors "discID" }}</div>
+        {{- if index .Errors "date" }}
+          <div class="invalid-feedback">{{ index .Errors "date" }}</div>
         {{- else }}
           <div class="valid-feedback"></div>
         {{- end }}
