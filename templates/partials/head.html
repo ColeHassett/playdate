@@ -1,5 +1,4 @@
-<!doctype html>
-<html lang="en">
+{{ define "partials/head.html" }}
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -14,21 +13,6 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css"
     />
-    <link rel="stylesheet" href="./custom-colors.css" />
+    <link rel="stylesheet" href="../custom-colors.css" />
   </head>
-  <body class="container mt-5 bg-primary">
-    <header class="bg-primary">
-      <div class="container">
-        <h1 class="display-1 text-center">PlayDate</h1>
-      </div>
-    </header>
-
-    <div>
-      {{- if .SignedUp }}
-        {{ template "home.html" . }}
-      {{- else }}
-        {{ template "register.html" }}
-      {{- end }}
-    </div>
-  </body>
-</html>
+{{ end }}

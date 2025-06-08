@@ -1,0 +1,32 @@
+{{ define "partials/playdate.html" }}
+{{ if .Errors }}
+{{ if .Errors.PlayDate }}
+<div>{{.Errors.PlayDate}}</div>
+{{ end }}
+{{ else }}
+<div id="playdate">
+    <div class="mb-3">
+        <label for="nameInput" class="form-label">Name:</label>
+        <input type="text"
+               class="form-control"
+               id="nameInput"
+               value="{{ .PlayDate.Game }}" />
+    </div>
+    <div class="mb-5">
+        <label for="timeInput" class="form-label">Time:</label>
+        <input type="text"
+               class="form-control"
+               id="timeInput"
+               value="{{ .PlayDate.Date }}" />
+    </div>
+    <div class="mb-5">
+        <label for="timeInput" class="form-label">Created Date:</label>
+        <input type="text"
+               class="form-control"
+               id="timeInput"
+               value="{{ .PlayDate.CreatedDate }}" />
+    </div>
+    {{ template "partials/players-table.html" . }}
+</div>
+{{ end }}
+{{ end }}
