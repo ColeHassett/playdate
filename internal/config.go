@@ -11,7 +11,6 @@ type AppConfig struct {
 	DiscordAPIKey     string
 	DiscordChannelID  string
 	DiscordGuildID    string
-	Env               string
 	PostgresHost      string
 	PostgresPort      string
 	PostgresDatabase  string
@@ -38,7 +37,6 @@ func newAppConfig() *AppConfig {
 		DiscordAPIKey:     getOrDefault("DISCORD_API_KEY", "fake-discord-api-key"),
 		DiscordChannelID:  getOrDefault("DISCORD_CHANNEL_ID", ""),
 		DiscordGuildID:    getOrDefault("DISCORD_GUILD_ID", ""),
-		Env:               getOrDefault("ENV", "dev"), // dev, or prod
 		PostgresHost:      getOrDefault("POSTGRES_HOST", "localhost"),
 		PostgresPort:      getOrDefault("POSTGRES_PORT", "5432"),
 		PostgresDatabase:  getOrDefault("POSTGRES_DB", "postgres"),

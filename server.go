@@ -21,9 +21,7 @@ var embedMigrations embed.FS
 
 func main() {
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	if internal.Config.Env == "dev" {
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
-	}
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
 
 	// note that this is path referenced from within the docker container
 	banner, err := os.ReadFile("banner.txt")
