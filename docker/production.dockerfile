@@ -12,4 +12,4 @@ FROM gcr.io/distroless/static-debian11
 COPY ./banner.txt /
 COPY --from=build /go/app/bin/app /go/app/bin
 COPY --from=build /go/app/templates /go/app/templates
-CMD ["/go/app/bin"]
+CMD ["/go/app/bin/app"]
