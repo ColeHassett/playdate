@@ -1,15 +1,23 @@
-# Start by building the application.
-FROM golang:1.23 as build
+FROM golang:1.23
 
-WORKDIR /go/app/
+WORKDIR /app
+
+# Copy go.mod and go.sum first to leverage Docker caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy the rest of the application source code
 COPY . .
 
-RUN go mod download
-RUN CGO_ENABLED=0 go build -C /go/app/ -o /go/app/bin/app
+# Build the Go application
+# CGO_ENABLED=0 is important for static binaries if you were to switch to distroless later,
+# but less critical for golang:bookworm which has libc. Still good practice for cross-platform.
+# -o specifies the output path and filename for the executable
+# ./... ensures all packages in the current directory and its subdirectories are built
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/app ./
 
-# Now copy it into our base image.
-FROM gcr.io/distroless/static-debian11
-COPY ./banner.txt /
-COPY --from=build /go/app/bin/app /go/app/bin
-COPY --from=build /go/app/templates /go/app/templates
-CMD ["/go/app/bin/app"]
+# Expose any ports your application listens on (optional, but good practice)
+EXPOSE 8080
+
+# Command to run the application
+CMD ["/app/app"]
