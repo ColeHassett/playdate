@@ -44,7 +44,7 @@ func StartAPI(db *bun.DB) {
 	router.POST("/playdate/:id/maybe", api.setPlayDateAttendence)
 	router.POST("/playdate/:id/no", api.setPlayDateAttendence)
 
-	router.Run("0.0.0.0")
+	router.Run("0.0.0.0:8080")
 }
 
 type BaseTemplateData struct {
