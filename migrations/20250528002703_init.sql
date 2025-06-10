@@ -14,8 +14,8 @@ CREATE TABLE IF NOT EXISTS player (
     created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS playdate_player (
-    player_id INT REFERENCES  player(id),
     playdate_id INT REFERENCES playdate(id),
+    player_id INT REFERENCES  player(id),
     attending STATUS DEFAULT 'no' NOT NULL,
     PRIMARY KEY (player_id, playdate_id)
 );

@@ -1,0 +1,40 @@
+{{ define "partials/home.html" }}
+{{ if .ServerError }}
+<div>{{.ServerError}}</div>
+{{ else }}
+<div id="home">
+    <span>Time to Play!</span>
+    <a class="btn btn-primary"
+       hx-get="/playdate"
+       hx-swap="outerHTML"
+       hx-target="#home">PlayDate</a>
+    <hr />
+    <h3>Scheduled PlayDates!</h3>
+    <table class="table table-striped table-hover table-responsive">
+        <thead>
+            <th scope="col">#</th>
+            <th scope="col">Game</th>
+            <th scope="col">Date & Time</th>
+        </thead>
+        <tbody>
+            {{ range .PlayDates }}
+            <tr hx-get="/playdate/{{ .ID }}"
+                hx-target="#home"
+                hx-swap="outerHTML"
+                hx-push-url="true">
+                <th scope="row">{{ .ID }}</th>
+                <td>{{ .Game }}</td>
+                <td>{{ .Date }}</td>
+            </tr>
+        {{ else }}
+            <tr>
+                <th scope="row">No PlayDates scheduled.</th>
+                <td></td>
+                <td></td>
+            </tr>
+            {{ end }}
+        </tbody>
+    </table>
+</div>
+{{ end }}
+{{ end }}
