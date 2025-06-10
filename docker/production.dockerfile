@@ -5,7 +5,7 @@ WORKDIR /go/app/
 COPY . .
 
 RUN go mod download
-RUN CGO_ENABLED=0 go build -C /go/app/src -o /go/app/bin/app
+RUN CGO_ENABLED=0 go build -C /go/app/ -o /go/app/bin/app
 
 # Now copy it into our base image.
 FROM gcr.io/distroless/static-debian11
