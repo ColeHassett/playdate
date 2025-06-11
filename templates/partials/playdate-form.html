@@ -4,22 +4,15 @@
 <span>Failed to create your PlayDate due to a server error. Please try again in a few minutes.</span>
 <span>Find the server error below for submitting a bug report!
     <br>
-{{.ServerError}}</span>
+    {{.ServerError}}</span>
 {{ end }}
 <div id="create-playdate">
     <h3 class="">Create PlayDate</h3>
-    <form class="{{- if .Errors -}} was-validated {{- else -}} needs-validated {{- end -}}"
-          hx-post="/playdate"
-          hx-swap="outerHTML"
-          hx-target="#create-playdate"
-          novalidate>
+    <form class="{{- if .Errors -}} was-validated {{- else -}} needs-validated {{- end -}}" hx-post="/playdate"
+        hx-swap="outerHTML" hx-target="#create-playdate" novalidate>
         <div class="mb-3">
             <label class="form-label" for="game">Game</label>
-            <input class="form-control"
-                   type="text"
-                   name="game"
-                   value="{{ .Game }}"
-                   required />
+            <input class="form-control" type="text" name="game" value="{{ .Game }}" required />
             {{- if .Errors }}
             {{- if index .Errors "game" }}
             <div class="invalid-feedback">{{ index .Errors "game" }}</div>
@@ -30,11 +23,7 @@
         </div>
         <div class="mb-3">
             <label class="form-label" for="date">Date/Time</label>
-            <input class="form-control"
-                   type="datetime-local"
-                   name="date"
-                   value="{{ .Date }}"
-                   required />
+            <input class="form-control" type="datetime-local" name="date" value="{{ .Date }}" required />
             {{- if .Errors }}
             {{- if index .Errors "date" }}
             <div class="invalid-feedback">{{ index .Errors "date" }}</div>

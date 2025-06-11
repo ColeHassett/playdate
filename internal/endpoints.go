@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -86,13 +87,30 @@ func (a *Api) index(c *gin.Context) {
 
 	// render actual home page since user has a cookie
 	state["SignedUp"] = true
-	playdates := []*PlayDate{}
-	err := a.db.NewSelect().Model(&playdates).Scan(a.ctx)
+	player, err := a.findPlayerFromCookie(c)
 	if err != nil {
-		log.Error().Err(err).Msg("DB error in index")
-		state["ServerError"] = "Failed to retrieve playdates due to a server error. Please try again later."
+		c.Redirect(http.StatusFound, "/")
+		return
 	}
-	state["PlayDates"] = playdates
+
+	// find playdates that are upcoming
+	upcomingPlaydates := []*PlayDate{}
+	nowEst := time.Now().UTC()
+	err = a.db.NewSelect().Model(&upcomingPlaydates).Relation("Players").Where("created_date <= ?", nowEst).Order("created_date asc").Scan(a.ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to query for upcoming playdates")
+		state["ServerError"] = "Failed to retrieve upcoming playdates due to a server error. Please try again later."
+	}
+
+	// find playdates in the past
+	pastPlaydates := []*PlayDate{}
+	err = a.db.NewSelect().Model(&pastPlaydates).Relation("Players").Where("created_date >= ?", nowEst).Order("created_date asc").Scan(a.ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to query for past playdates")
+		state["ServerError"] = "Failed to retrieve past playdates due to a server error. Please try again later."
+	}
+	state["PlayDates"] = append(upcomingPlaydates, pastPlaydates...)
+	state["Player"] = player
 	c.HTML(http.StatusOK, "pages/home.html", state)
 }
 
@@ -101,6 +119,12 @@ func (a *Api) showPlayDateForm(c *gin.Context) {
 }
 
 func (a *Api) createPlayDateTemplate(c *gin.Context) {
+	_, err := a.findPlayerFromCookie(c)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/")
+		return
+	}
+
 	inputGame := c.PostForm("game")
 	inputDatetime := c.PostForm("date")
 
@@ -118,6 +142,8 @@ func (a *Api) createPlayDateTemplate(c *gin.Context) {
 	parsedDatetime, err := time.Parse(expectedTimeLayout, inputDatetime)
 	if err != nil {
 		errors["date"] = "invalid format for date/time, please use layout 2025-01-01T12:00"
+	} else if parsedDatetime.Before(time.Now()) {
+		errors["date"] = "can not make a playdate in the past"
 	}
 	formData["Errors"] = errors
 	if len(errors) > 0 {
@@ -139,6 +165,12 @@ func (a *Api) createPlayDateTemplate(c *gin.Context) {
 }
 
 func (a *Api) getPlayDateTemplate(c *gin.Context) {
+	_, err := a.findPlayerFromCookie(c)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/")
+		return
+	}
+
 	state := gin.H{}
 	errors := map[string]string{}
 	id, err := strconv.Atoi(c.Param("id"))
@@ -159,7 +191,7 @@ func (a *Api) getPlayDateTemplate(c *gin.Context) {
 		return
 	}
 	playdatePlayers := []*PlayDateToPlayer{}
-	err = a.db.NewSelect().Model(&playdatePlayers).Relation("Player").Where("id = ?", id).Scan(c.Request.Context())
+	err = a.db.NewSelect().Model(&playdatePlayers).Relation("Player").Where("playdate_id = ?", id).Scan(c.Request.Context())
 	if err != nil {
 		// report error back to user, but just render the page like normal
 		log.Err(err).Any("playdate", playdate).Msg("failed to find related players to playdate")
@@ -179,6 +211,12 @@ func (a *Api) getPlayDateTemplate(c *gin.Context) {
 }
 
 func (a *Api) setPlayDateAttendence(c *gin.Context) {
+	player, err := a.findPlayerFromCookie(c)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/")
+		return
+	}
+
 	uriParts := strings.Split(c.Request.RequestURI, "/")
 	action := uriParts[len(uriParts)-1]
 	log.Debug().Str("action", action).Msg("received attendance action")
@@ -195,30 +233,6 @@ func (a *Api) setPlayDateAttendence(c *gin.Context) {
 	if err != nil {
 		// if the given id doesn't exist just return the called to the home page
 		log.Err(err).Int("playdateID", id).Msg("failed to find playdate")
-		c.Redirect(http.StatusFound, "/")
-		return
-	}
-
-	player := &Player{}
-	cookie, err := c.Cookie("playdate")
-	if err != nil {
-		// redirect the user to the home page if they don't have a cookie
-		log.Err(err).Msg("failed to parse user's cookie")
-		c.Redirect(http.StatusFound, "/")
-		return
-	}
-
-	err = json.Unmarshal([]byte(cookie), player)
-	if err != nil {
-		// if the given player id doesn't exist just return the called to the home page
-		log.Err(err).Str("cookie", cookie).Int("playerID", id).Msg("failed to unmarshal cookie into player struct")
-		c.Redirect(http.StatusFound, "/")
-		return
-	}
-	err = a.db.NewSelect().Model(player).WherePK().Scan(c.Request.Context())
-	if err != nil {
-		// if the given player id doesn't exist just return the called to the home page
-		log.Err(err).Any("player", player).Int("playerID", id).Msg("failed to find the player from their cookie")
 		c.Redirect(http.StatusFound, "/")
 		return
 	}
@@ -311,4 +325,30 @@ func (a *Api) fetchPoppedDates() {
 		}
 		a.dg.ChannelMessageSend(Config.DiscordChannelID, fmt.Sprintf("time to play: %s", players))
 	}
+}
+
+func (a *Api) findPlayerFromCookie(c *gin.Context) (*Player, error) {
+	player := &Player{}
+	cookie, err := c.Cookie("playdate")
+	if err != nil {
+		msg := "failed to parse user's cookie"
+		log.Err(err).Msg(msg)
+		return nil, errors.New(msg)
+	}
+
+	err = json.Unmarshal([]byte(cookie), player)
+	if err != nil {
+		// if the given player id doesn't exist just return the called to the home page
+		msg := "failed to unmarshal cookie into player struct"
+		log.Err(err).Str("cookie", cookie).Msg(msg)
+		return nil, errors.New(msg)
+	}
+	err = a.db.NewSelect().Model(player).WherePK().Scan(c.Request.Context())
+	if err != nil {
+		// if the given player id doesn't exist just return the called to the home page
+		msg := "failed to find the player from their cookie"
+		log.Err(err).Str("cookie", cookie).Any("player", player).Msg(msg)
+		return nil, errors.New(msg)
+	}
+	return player, nil
 }
