@@ -1,12 +1,8 @@
 package internal
 
 import (
-	"log"
-	"os"
-	"os/signal"
-	"syscall"
-
 	"github.com/bwmarrin/discordgo"
+	"github.com/rs/zerolog/log"
 	"github.com/uptrace/bun"
 )
 
@@ -99,14 +95,15 @@ func deleteDiscordCommands(dg *discordgo.Session, registeredCommands []*discordg
 	return nil
 }
 
-func createDiscordBot(errChan chan error, db *bun.DB) {
-	log.Println("Attempting to start Discord Bot.")
+func createDiscordBot(errChan chan error, db *bun.DB) (dg *discordgo.Session) {
+	// log.Println("Attempting to start Discord Bot.")
+	log.Info().Msg("Attempting to start Discord Bot.")
 	dg, err := discordgo.New("Bot " + Config.DiscordAPIKey)
 	if err != nil {
 		errChan <- err
 	}
 
-	log.Println("Adding Bot handlers.")
+	// log.Println("Adding Bot handlers.")
 	dg.AddHandler(func(session *discordgo.Session, interaction *discordgo.InteractionCreate) {
 		if handler, ok := commandHandlers[interaction.ApplicationCommandData().Name]; ok {
 			botContext := &BotContext{
@@ -122,32 +119,34 @@ func createDiscordBot(errChan chan error, db *bun.DB) {
 	})
 
 	// Open websocket connection to discord
-	log.Println("Opening websocket to Discord...")
+	// log.Println("Opening websocket to Discord...")
 	err = dg.Open()
 	if err != nil {
 		errChan <- err
 	}
-	commands, err := createDiscordCommands(dg)
+	// commands, err := createDiscordCommands(dg)
 	if err != nil {
 		errChan <- err
 	}
 	defer dg.Close()
 	defer deleteDiscordCommands(dg, commands)
 
-	// Wait for ctrl+c to close app
-	log.Println("Started Discord Bot. Waiting on commands")
-	sc := make(chan os.Signal, 1)
-	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-	<-sc
+	return dg
 
-	errChan <- nil
+	// Wait for ctrl+c to close app
+	// log.Println("Started Discord Bot. Waiting on commands")
+	// sc := make(chan os.Signal, 1)
+	// signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+	// <-sc
+
+	// errChan <- nil
 }
 
-func startDiscordBot(db *bun.DB) {
+func StartDiscordBot(db *bun.DB) (dg *discordgo.Session) {
 	errorChan := make(chan error)
-	go createDiscordBot(errorChan, db)
-	errors := <-errorChan
-	if errors != nil {
-		log.Fatal(errors)
-	}
+	return createDiscordBot(errorChan, db)
+	// errors := <-errorChan
+	// if errors != nil {
+	// 	log.Err(errors)
+	// }
 }
