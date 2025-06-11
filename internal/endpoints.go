@@ -219,7 +219,7 @@ func (a *Api) setPlayDateAttendence(c *gin.Context) {
 	}
 
 	playdatePlayers := []*PlayDateToPlayer{}
-	err = a.db.NewSelect().Model(&playdatePlayers).Relation("Player").Where("id = ?", player.ID).Scan(c.Request.Context())
+	err = a.db.NewSelect().Model(&playdatePlayers).Relation("Player").Where("playdate_id = ?", playdate.ID).Scan(c.Request.Context())
 	if err != nil {
 		// report error back to user, but just render the page like normal
 		log.Err(err).Any("playdate", playdate).Msg("failed to find related players to playdate")
