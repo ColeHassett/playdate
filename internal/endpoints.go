@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bwmarrin/discordgo"
 	"github.com/gin-contrib/logger"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
@@ -17,8 +18,8 @@ import (
 	"github.com/uptrace/bun"
 )
 
-func StartAPI(db *bun.DB) {
-	api := Api{db: db, ctx: context.Background()}
+func StartAPI(db *bun.DB, dg *discordgo.Session) {
+	api := Api{db: db, dg: dg, ctx: context.Background()}
 
 	router := gin.New()        // NOTE: Not using Default to avoid the wrong logger being used?
 	router.Use(gin.Recovery()) // handle panics (aka unhandled exceptions)
@@ -45,6 +46,7 @@ func StartAPI(db *bun.DB) {
 	router.POST("/playdate/:id/maybe", api.setPlayDateAttendence)
 	router.POST("/playdate/:id/no", api.setPlayDateAttendence)
 
+	go api.watchDog()
 	router.Run("0.0.0.0:8080")
 }
 
@@ -55,7 +57,22 @@ type BaseTemplateData struct {
 
 type Api struct {
 	db  *bun.DB
+	dg  *discordgo.Session
 	ctx context.Context
+}
+
+func (a *Api) watchDog() {
+	log.Info().Msg("Watching for PlayDates..")
+	ticker := time.NewTicker(time.Minute)
+
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				a.fetchPoppedDates()
+			}
+		}
+	}()
 }
 
 func (a *Api) index(c *gin.Context) {
@@ -282,6 +299,32 @@ func (a *Api) registerUserTemplate(c *gin.Context) {
 	c.SetCookie("playdate", string(val), 0, "/", "", false, true)
 	c.Status(http.StatusCreated)
 	c.Header("HX-Location", "/")
+}
+
+func (a *Api) fetchPoppedDates() {
+	log.Info().Msg("Any PlayDates??")
+	state := gin.H{"Errors": map[string]string{}}
+
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		log.Error().Err(err).Msg("Cannot load time location")
+		state["ServerError"] = "Failed to load time location"
+	}
+	now := time.Now().In(loc)
+	playdates := []*PlayDate{}
+	err = a.db.NewSelect().Model(&playdates).Where("date = ?", now.Format("2006-01-02T15:04")).Scan(a.ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Watch is Kill")
+		state["ServerError"] = "Watch Dead"
+	}
+
+	for _, p := range playdates {
+		players := "<@108736074557239296>"
+		for _, b := range p.Players {
+			players = players + fmt.Sprintf("<@%s>", b.DiscordID)
+		}
+		a.dg.ChannelMessageSend(Config.DiscordChannelID, fmt.Sprintf("time to play: %s", players))
+	}
 }
 
 func (a *Api) findPlayerFromCookie(c *gin.Context) (*Player, error) {

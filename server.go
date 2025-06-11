@@ -53,6 +53,6 @@ func main() {
 		log.Panic().Err(err).Msg("failed to run goose migrations")
 	}
 
-	internal.StartAPI(db) // start webserver on subprocess
-	// startDiscordBot(db) // start discord bot on main process
+	dg := internal.StartDiscordBot(db) // start discord bot on main process
+	internal.StartAPI(db, dg)          // start webserver on subprocess
 }
