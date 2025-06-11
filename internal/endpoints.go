@@ -46,7 +46,7 @@ func StartAPI(db *bun.DB, dg *discordgo.Session) {
 	router.POST("/playdate/:id/no", api.setPlayDateAttendence)
 
 	go api.watchDog()
-	router.Run()
+	router.Run("0.0.0.0:8080")
 }
 
 type BaseTemplateData struct {
@@ -236,7 +236,7 @@ func (a *Api) setPlayDateAttendence(c *gin.Context) {
 	}
 
 	playdatePlayers := []*PlayDateToPlayer{}
-	err = a.db.NewSelect().Model(&playdatePlayers).Relation("Player").Where("id = ?", player.ID).Scan(c.Request.Context())
+	err = a.db.NewSelect().Model(&playdatePlayers).Relation("Player").Where("playdate_id = ?", playdate.ID).Scan(c.Request.Context())
 	if err != nil {
 		// report error back to user, but just render the page like normal
 		log.Err(err).Any("playdate", playdate).Msg("failed to find related players to playdate")
