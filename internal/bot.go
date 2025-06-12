@@ -96,10 +96,10 @@ func deleteDiscordCommands(dg *discordgo.Session, registeredCommands []*discordg
 }
 
 func createDiscordBot(errChan chan error, db *bun.DB) (dg *discordgo.Session) {
-	// log.Println("Attempting to start Discord Bot.")
 	log.Info().Msg("Attempting to start Discord Bot.")
 	dg, err := discordgo.New("Bot " + Config.DiscordAPIKey)
 	if err != nil {
+		log.Err(err).Msg("failed to create discord client")
 		errChan <- err
 	}
 

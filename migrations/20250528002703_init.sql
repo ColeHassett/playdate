@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS player (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
     discord_id TEXT NOT NULL,
-    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    verification_code VARCHAR(128) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 );
 CREATE TABLE IF NOT EXISTS playdate_player (
     playdate_id INT REFERENCES playdate(id),

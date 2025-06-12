@@ -26,10 +26,11 @@ type PlayDate struct {
 type Player struct {
 	bun.BaseModel `bun:"table:player"`
 
-	ID          int       `bun:",pk,autoincrement" json:"id"`
-	CreatedDate time.Time `bun:"created_date,nullzero,default:CURRENT_TIMESTAMP" json:"created_date"`
-	Name        string    `bun:"name,notnull" json:"name"`
-	DiscordID   string    `bun:"discord_id,notnull" json:"discord_id"`
+	ID               int       `bun:",pk,autoincrement" json:"id"`
+	CreatedDate      time.Time `bun:"created_date,nullzero,default:CURRENT_TIMESTAMP" json:"created_date"`
+	Name             string    `bun:"name,notnull" json:"name"`
+	DiscordID        string    `bun:"discord_id,notnull" json:"discord_id"`
+	VerificationCode string    `bun:"verification_code,notnull" json:"verification_code"`
 }
 
 type PlayDateToPlayer struct {
