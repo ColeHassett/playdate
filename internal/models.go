@@ -13,14 +13,41 @@ func InitializeManyToManyRelationships(db *bun.DB) {
 	db.RegisterModel((*PlayDateToPlayer)(nil))
 }
 
+type PlayDateStatus string
+
+const (
+	PlayDateStatusPending PlayDateStatus = "pending"
+	PlayDateStatusDone    PlayDateStatus = "done"
+)
+
+type Attendance string
+
+const (
+	AttendanceNo    Attendance = "no"
+	AttendanceMaybe Attendance = "maybe"
+	AttendanceYes   Attendance = "yes"
+)
+
+func AttendanceFrom(s string) Attendance {
+	switch s {
+	case string(AttendanceYes):
+		return AttendanceYes
+	case string(AttendanceMaybe):
+		return AttendanceMaybe
+	default:
+		return AttendanceNo
+	}
+}
+
 type PlayDate struct {
 	bun.BaseModel `bun:"table:playdate"`
 
-	ID          int       `bun:",pk,autoincrement" json:"id"`
-	CreatedDate time.Time `bun:"created_date,nullzero,default:CURRENT_TIMESTAMP" json:"created_date"`
-	Game        string    `bun:"game,notnull" json:"game"`
-	Date        time.Time `bun:"date,nullzero" json:"date"`
-	Players     []*Player `bun:"m2m:playdate_player,join:PlayDate=Player"`
+	ID          int            `bun:",pk,autoincrement" json:"id"`
+	CreatedDate time.Time      `bun:"created_date,nullzero,default:CURRENT_TIMESTAMP" json:"created_date"`
+	Game        string         `bun:"game,notnull" json:"game"`
+	Date        time.Time      `bun:"date,nullzero" json:"date"`
+	Players     []*Player      `bun:"m2m:playdate_player,join:PlayDate=Player"`
+	Status      PlayDateStatus `bun:"status,notnull,default:'pending',type:playdate_status"`
 }
 
 type Player struct {
@@ -35,9 +62,9 @@ type Player struct {
 type PlayDateToPlayer struct {
 	bun.BaseModel `bun:"table:playdate_player"`
 
-	PlayDateID int       `bun:"playdate_id,pk"`
-	PlayDate   *PlayDate `bun:"rel:belongs-to,join:playdate_id=id"`
-	PlayerID   int       `bun:"player_id,pk"`
-	Player     *Player   `bun:"rel:belongs-to,join:player_id=id"`
-	Attending  string    `bun:"attending,notnull"`
+	PlayDateID int        `bun:"playdate_id,pk"`
+	PlayDate   *PlayDate  `bun:"rel:belongs-to,join:playdate_id=id"`
+	PlayerID   int        `bun:"player_id,pk"`
+	Player     *Player    `bun:"rel:belongs-to,join:player_id=id"`
+	Attending  Attendance `bun:"attending,notnull,default:'no',type:attendance"`
 }
