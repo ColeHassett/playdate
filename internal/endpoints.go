@@ -19,6 +19,12 @@ import (
 	"github.com/uptrace/bun"
 )
 
+var (
+	// NOTE: This is just a const for the entire server to provide easy access to convert timestamps into EST.
+	// This would be better on the client as their browser could convert the timestamp to their local timezone.
+	easternLocation, _ = time.LoadLocation("America/New_York")
+)
+
 func StartAPI(db *bun.DB, dg *discordgo.Session) {
 	api := Api{db: db, dg: dg, ctx: context.Background()}
 
@@ -99,12 +105,11 @@ func (a *Api) index(c *gin.Context) {
 
 	// find playdates that are upcoming
 	upcomingPlaydates := []*PlayDate{}
-	nowEst := time.Now().UTC()
 	err = a.db.NewSelect().
 		Model(&upcomingPlaydates).
 		Relation("Owner").
 		Relation("Players").
-		Where("play_date.created_date <= ?", nowEst).
+		Where("play_date.status = ?", PlayDateStatusPending).
 		Order("play_date.created_date asc").
 		Scan(a.ctx)
 	if err != nil {
@@ -118,15 +123,23 @@ func (a *Api) index(c *gin.Context) {
 		Model(&pastPlaydates).
 		Relation("Owner").
 		Relation("Players").
-		Where("play_date.created_date >= ?", nowEst).
-		Order("play_date.created_date asc").
+		Where("play_date.status = ?", PlayDateStatusDone).
+		Order("play_date.created_date desc").
 		Scan(a.ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to query for past playdates")
 		state["ServerError"] = "Failed to retrieve past playdates due to a server error. Please try again later."
 	}
-	state["PlayDates"] = append(upcomingPlaydates, pastPlaydates...)
+	playdates := append(upcomingPlaydates, pastPlaydates...)
+
+	// NOTE: manually convert timestamp to eastern
+	for _, p := range playdates {
+		p.Date = p.Date.In(easternLocation)
+	}
+
+	state["PlayDates"] = playdates
 	state["Player"] = player
+
 	c.HTML(http.StatusOK, "pages/home.html", state)
 }
 
@@ -155,12 +168,6 @@ func (a *Api) createPlayDateTemplate(c *gin.Context) {
 	// NOTE: that this date is not random but instead hardcoded into the standard
 	// libary to code layouts against.
 	expectedTimeLayout := "2006-01-02T15:04"
-	// TODO: This eastern thing should probably be moved somewhere shared so we can just reuse it everywhere
-	easternLocation, err := time.LoadLocation("America/New_York")
-	if err != nil {
-		// WARN: this should NEVER happen
-		log.Panic().Err(err).Msg("failed to find the eastern timezone")
-	}
 	parsedDatetime, err := time.ParseInLocation(expectedTimeLayout, inputDatetime, easternLocation)
 	now := time.Now().In(easternLocation)
 	if err != nil {
@@ -175,6 +182,7 @@ func (a *Api) createPlayDateTemplate(c *gin.Context) {
 		c.HTML(http.StatusOK, "partials/playdate-form.html", formData)
 		return
 	}
+	log.Debug().Str("datetime", parsedDatetime.String()).Msg("*** Checking time prior to db")
 
 	playdate := PlayDate{Game: inputGame, Date: parsedDatetime, OwnerId: player.ID}
 	_, err = a.db.NewInsert().Model(&playdate).Exec(a.ctx)
@@ -231,6 +239,9 @@ func (a *Api) getPlayDateTemplate(c *gin.Context) {
 	}
 
 	log.Debug().Interface("playdatePlayers", playdatePlayers).Msg("Playdate players details")
+	// NOTE: Manually parse timestamp into eastern time
+	playdate.Date = playdate.Date.In(easternLocation)
+	playdate.CreatedDate = playdate.CreatedDate.In(easternLocation)
 	state["Errors"] = errors
 	state["PlayDate"] = playdate
 	state["PlayDatePlayers"] = playdatePlayers
@@ -413,19 +424,15 @@ func (a *Api) fetchPoppedDates() {
 	log.Info().Msg("Any PlayDates??")
 	state := gin.H{"Errors": map[string]string{}}
 
-	loc, err := time.LoadLocation("America/New_York")
-	if err != nil {
-		log.Error().Err(err).Msg("Cannot load time location")
-		state["ServerError"] = "Failed to load time location"
-	}
-	now := time.Now().In(loc)
+	now := time.Now()
 	playdates := []*PlayDate{}
-	err = a.db.NewSelect().Model(&playdates).Where("date = ?", now.Format("2006-01-02T15:04")).Scan(a.ctx)
+	err := a.db.NewSelect().Model(&playdates).Where("date <= ?", now.Format("2006-01-02T15:04")).Where("status = ?", PlayDateStatusPending).Scan(a.ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Watch is Kill")
 		state["ServerError"] = "Watch Dead"
 	}
 
+	log.Info().Any("playdates", playdates).Msg("Found the following playdates")
 	for _, p := range playdates {
 		players := ""
 		for _, b := range p.Players {
@@ -441,6 +448,7 @@ func (a *Api) fetchPoppedDates() {
 		if err != nil {
 			log.Err(err).Any("playdate", p).Msg("failed to update playdate status")
 		}
+		log.Info().Any("playdate", p).Msg("sent notification for playdate starting")
 	}
 }
 
