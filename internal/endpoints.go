@@ -426,7 +426,7 @@ func (a *Api) fetchPoppedDates() {
 
 	now := time.Now()
 	playdates := []*PlayDate{}
-	err := a.db.NewSelect().Model(&playdates).Where("date <= ?", now.Format("2006-01-02T15:04")).Where("status = ?", PlayDateStatusPending).Scan(a.ctx)
+	err := a.db.NewSelect().Model(&playdates).Relation("Owner").Relation("Players").Where("date <= ?", now.Format("2006-01-02T15:04")).Where("status = ?", PlayDateStatusPending).Scan(a.ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Watch is Kill")
 		state["ServerError"] = "Watch Dead"
@@ -438,7 +438,8 @@ func (a *Api) fetchPoppedDates() {
 		for _, b := range p.Players {
 			players = players + fmt.Sprintf("<@%s>", b.DiscordID)
 		}
-		_, err = a.dg.ChannelMessageSend(Config.DiscordChannelID, fmt.Sprintf("time to play: %s", players))
+		msg := fmt.Sprintf("Playdate %s created by <@%s> is happening now! Make sure to join!! %s", p.Game, p.Owner.DiscordID, players)
+		_, err = a.dg.ChannelMessageSend(Config.DiscordChannelID, msg)
 		if err != nil {
 			log.Err(err).Any("playdate", p).Msg("failed to send message for playdate")
 		}
