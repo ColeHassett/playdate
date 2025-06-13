@@ -172,6 +172,13 @@ func (a *Api) createPlayDateTemplate(c *gin.Context) {
 		return
 	}
 
+	// send notification to configure channel to share the new playdate to the masses!
+	msg := fmt.Sprintf("Playdate %s at %s by %s! Check it out here: https://playdate.colinthatcher.dev/playdates/%d", playdate.Game, playdate.Date, playdate.Owner.Name, playdate.ID)
+	_, err = a.dg.ChannelMessageSend(Config.DiscordChannelID, msg)
+	if err != nil {
+		log.Err(err).Any("playdate", playdate).Msg("failed to send message for new playdate to discord")
+	}
+
 	// redirect the user back to the index router (i.e. the homepage)
 	c.Header("HX-Location", "/")
 }
@@ -331,7 +338,7 @@ func (a *Api) fetchPoppedDates() {
 	}
 
 	for _, p := range playdates {
-		players := "<@108736074557239296>"
+		players := ""
 		for _, b := range p.Players {
 			players = players + fmt.Sprintf("<@%s>", b.DiscordID)
 		}
