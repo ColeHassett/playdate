@@ -13,6 +13,7 @@ require (
 require (
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/gin-contrib/logger v1.2.6 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
 	github.com/rs/zerolog v1.34.0 // indirect

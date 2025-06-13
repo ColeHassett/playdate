@@ -13,6 +13,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/gin-contrib/logger"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/uptrace/bun"
@@ -39,6 +40,7 @@ func StartAPI(db *bun.DB, dg *discordgo.Session) {
 	// Templated endpoints
 	router.GET("/", api.index)
 	router.POST("/register", api.registerUserTemplate)
+	router.POST("/verify", api.verifyPlayer)
 	router.GET("/playdate", api.showPlayDateForm)
 	router.POST("/playdate", api.createPlayDateTemplate)
 	router.GET("/playdate/:id", api.getPlayDateTemplate)
@@ -89,6 +91,8 @@ func (a *Api) index(c *gin.Context) {
 	state["SignedUp"] = true
 	player, err := a.findPlayerFromCookie(c)
 	if err != nil {
+		// delete the cookie that was on the request to avoid an infinite loop
+		c.SetCookie("playdate", "", -1, "/", "", false, true)
 		c.Redirect(http.StatusFound, "/")
 		return
 	}
@@ -151,11 +155,20 @@ func (a *Api) createPlayDateTemplate(c *gin.Context) {
 	// NOTE: that this date is not random but instead hardcoded into the standard
 	// libary to code layouts against.
 	expectedTimeLayout := "2006-01-02T15:04"
-	parsedDatetime, err := time.Parse(expectedTimeLayout, inputDatetime)
+	// TODO: This eastern thing should probably be moved somewhere shared so we can just reuse it everywhere
+	easternLocation, err := time.LoadLocation("America/New_York")
 	if err != nil {
+		// WARN: this should NEVER happen
+		log.Panic().Err(err).Msg("failed to find the eastern timezone")
+	}
+	parsedDatetime, err := time.ParseInLocation(expectedTimeLayout, inputDatetime, easternLocation)
+	now := time.Now().In(easternLocation)
+	if err != nil {
+		formData["Date"] = ""
 		errors["date"] = "invalid format for date/time, please use layout 2025-01-01T12:00"
-	} else if parsedDatetime.Before(time.Now()) {
-		errors["date"] = "can not make a playdate in the past"
+	} else if parsedDatetime.Before(now) {
+		formData["Date"] = ""
+		errors["date"] = fmt.Sprintf("can not make a playdate in the past, %v is before %v", parsedDatetime, now)
 	}
 	formData["Errors"] = errors
 	if len(errors) > 0 {
@@ -280,7 +293,7 @@ func (a *Api) registerUserTemplate(c *gin.Context) {
 	name := c.PostForm("name")
 	discID := c.PostForm("discID")
 
-	formData := gin.H{"Name": name, "DiscID": discID}
+	formData := gin.H{"Name": name, "DiscID": discID, "Verifying": true}
 	errors := map[string]string{}
 	if name == "" {
 		errors["name"] = "name is required"
@@ -298,6 +311,7 @@ func (a *Api) registerUserTemplate(c *gin.Context) {
 	player := Player{Name: name, DiscordID: discID}
 	err := a.db.NewSelect().Model(&player).Where("discord_id = ?", player.DiscordID).Scan(a.ctx)
 	if err != nil {
+		player.VerificationCode = uuid.NewString()
 		_, err := a.db.NewInsert().Model(&player).Exec(a.ctx)
 		if err != nil {
 			log.Err(err).Msg("failed to create new player")
@@ -305,6 +319,79 @@ func (a *Api) registerUserTemplate(c *gin.Context) {
 			c.HTML(http.StatusOK, "partials/register.html", formData)
 			return
 		}
+	} else {
+		// update the player's verification code to enable them to re-login
+		player.VerificationCode = uuid.NewString()
+		_, err = a.db.NewUpdate().Model(&player).Where("discord_id = ?", player.DiscordID).Exec(a.ctx)
+		if err != nil {
+			log.Err(err).Msg("failed to update player with new verification code")
+			formData["ServerError"] = err.Error()
+			c.HTML(http.StatusOK, "partials/register.html", formData)
+			return
+		}
+	}
+
+	channel, err := a.dg.UserChannelCreate(discID)
+	if err != nil {
+		log.Err(err).Any("player", player).Msg("failed to create private channel to send verification code")
+		formData["ServerError"] = err.Error()
+		c.HTML(http.StatusOK, "partials/register.html", formData)
+		return
+	}
+	_, err = a.dg.ChannelMessageSend(
+		channel.ID,
+		fmt.Sprintf("Here is your verification code from the PlayDate application!\n`%s`\nUse this to complete your signup/login.", player.VerificationCode),
+	)
+	if err != nil {
+		log.Err(err).Any("player", player).Msg("failed to send verification code to user directly")
+		formData["ServerError"] = err.Error()
+		c.HTML(http.StatusOK, "partials/register.html", formData)
+		return
+	}
+
+	c.HTML(http.StatusOK, "partials/register.html", formData)
+}
+
+func (a *Api) verifyPlayer(c *gin.Context) {
+	name := c.PostForm("name")
+	discID := c.PostForm("discID")
+	verificationCode := c.PostForm("verificationCode")
+
+	formData := gin.H{"Name": name, "DiscID": discID, "Verifying": true, "VerificationCode": verificationCode}
+	errors := map[string]string{}
+	if name == "" {
+		errors["name"] = "name is required"
+	}
+	if discID == "" {
+		errors["discID"] = "discID is required"
+	}
+	if verificationCode == "" {
+		errors["verificationCode"] = "verificationCode is required"
+	}
+	if len(errors) > 0 {
+		formData["Errors"] = errors
+		log.Debug().Any("errors", errors).Msg("form data didn't meet validation")
+		c.HTML(http.StatusOK, "partials/register.html", formData)
+		return
+	}
+
+	player := Player{Name: name, DiscordID: discID}
+	err := a.db.NewSelect().Model(&player).Where("discord_id = ?", player.DiscordID).Scan(a.ctx)
+	if err != nil {
+		log.Err(err).Any("player", player).Msg("failed to find player")
+		formData["ServerError"] = err.Error()
+		c.HTML(http.StatusOK, "partials/register.html", formData)
+		return
+	}
+
+	// check if the verifcation codes match, otherwise reroute back to registration
+	if player.VerificationCode != verificationCode {
+		formData["VerificationCode"] = "" // required to show error message
+		errors["verificationCode"] = "invalid verification code provided"
+		formData["Errors"] = errors
+		log.Debug().Any("player", player).Any("errors", errors).Msg("provided verification code didn't match our records")
+		c.HTML(http.StatusOK, "partials/register.html", formData)
+		return
 	}
 
 	val, _ := json.Marshal(player)
