@@ -13,6 +13,7 @@
             <th scope="col">Game</th>
             <th scope="col">Owner</th>
             <th scope="col">Date & Time</th>
+            <th scope="col">Status</th>
             <th scope="col"># Signed up Players</th>
         </thead>
         <tbody>
@@ -22,6 +23,7 @@
                 <td>{{ .Game }}</td>
                 <td>{{ .Owner.Name }}</td>
                 <td>{{ .Date }}</td>
+                <td>{{ .Status }}</td>
                 <td>{{ len .Players }}</td>
                 {{ else }}
             <tr>

@@ -242,9 +242,11 @@ func (a *Api) setPlayDateAttendence(c *gin.Context) {
 		return
 	}
 
+	// TODO: This can probably be cleaned up somehow
 	uriParts := strings.Split(c.Request.RequestURI, "/")
-	action := uriParts[len(uriParts)-1]
-	log.Debug().Str("action", action).Msg("received attendance action")
+	inputAction := uriParts[len(uriParts)-1]
+	attendance := AttendanceFrom(inputAction) // parse input attendence action to internal enum
+	log.Debug().Any("action", attendance).Msg("received attendance action")
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		// redirect the user to the home page if they request with an improper id
@@ -262,9 +264,9 @@ func (a *Api) setPlayDateAttendence(c *gin.Context) {
 		return
 	}
 
-	log.Info().Int("playdateID", playdate.ID).Int("playerID", player.ID).Str("action", action).Msg("attempting to set playdate attendance")
+	log.Info().Int("playdateID", playdate.ID).Int("playerID", player.ID).Any("action", attendance).Msg("attempting to set playdate attendance")
 	errors := map[string]string{}
-	rel := &PlayDateToPlayer{PlayDateID: playdate.ID, PlayerID: player.ID, Attending: action}
+	rel := &PlayDateToPlayer{PlayDateID: playdate.ID, PlayerID: player.ID, Attending: attendance}
 	_, err = a.db.NewInsert().Model(rel).On("CONFLICT (playdate_id, player_id) DO UPDATE").Set("attending = EXCLUDED.attending").Exec(a.ctx)
 	if err != nil {
 		// send error back to user within the players-table.html
@@ -422,7 +424,16 @@ func (a *Api) fetchPoppedDates() {
 		for _, b := range p.Players {
 			players = players + fmt.Sprintf("<@%s>", b.DiscordID)
 		}
-		a.dg.ChannelMessageSend(Config.DiscordChannelID, fmt.Sprintf("time to play: %s", players))
+		_, err = a.dg.ChannelMessageSend(Config.DiscordChannelID, fmt.Sprintf("time to play: %s", players))
+		if err != nil {
+			log.Err(err).Any("playdate", p).Msg("failed to send message for playdate")
+		}
+		// mark a playdate as done if its "popped"
+		p.Status = PlayDateStatusDone
+		_, err = a.db.NewUpdate().Model(p).WherePK().Exec(a.ctx)
+		if err != nil {
+			log.Err(err).Any("playdate", p).Msg("failed to update playdate status")
+		}
 	}
 }
 
