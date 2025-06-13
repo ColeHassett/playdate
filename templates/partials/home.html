@@ -11,6 +11,7 @@
         <thead>
             <th scope="col">#</th>
             <th scope="col">Game</th>
+            <th scope="col">Owner</th>
             <th scope="col">Date & Time</th>
             <th scope="col"># Signed up Players</th>
         </thead>
@@ -19,6 +20,7 @@
             <tr hx-get="/playdate/{{ .ID }}" hx-target="#home" hx-swap="outerHTML" hx-push-url="true">
                 <th scope="row">{{ .ID }}</th>
                 <td>{{ .Game }}</td>
+                <td>{{ .Owner.Name }}</td>
                 <td>{{ .Date }}</td>
                 <td>{{ len .Players }}</td>
                 {{ else }}

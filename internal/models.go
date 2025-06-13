@@ -16,11 +16,15 @@ func InitializeManyToManyRelationships(db *bun.DB) {
 type PlayDate struct {
 	bun.BaseModel `bun:"table:playdate"`
 
-	ID          int       `bun:",pk,autoincrement" json:"id"`
-	CreatedDate time.Time `bun:"created_date,nullzero,default:CURRENT_TIMESTAMP" json:"created_date"`
+	ID          int       `bun:",pk,autoincrement"`
+	CreatedDate time.Time `bun:"created_date,nullzero,default:CURRENT_TIMESTAMP"`
 	Game        string    `bun:"game,notnull" json:"game"`
 	Date        time.Time `bun:"date,nullzero" json:"date"`
-	Players     []*Player `bun:"m2m:playdate_player,join:PlayDate=Player"`
+	OwnerId     int       `bun:"owner_id,notnull"`
+
+	// just relationship fields for bun to utilize
+	Players []*Player `bun:"m2m:playdate_player,join:PlayDate=Player"`
+	Owner   *Player   `bun:"rel:belongs-to,join:owner_id=id"`
 }
 
 type Player struct {
@@ -35,9 +39,11 @@ type Player struct {
 type PlayDateToPlayer struct {
 	bun.BaseModel `bun:"table:playdate_player"`
 
-	PlayDateID int       `bun:"playdate_id,pk"`
-	PlayDate   *PlayDate `bun:"rel:belongs-to,join:playdate_id=id"`
-	PlayerID   int       `bun:"player_id,pk"`
-	Player     *Player   `bun:"rel:belongs-to,join:player_id=id"`
-	Attending  string    `bun:"attending,notnull"`
+	PlayDateID int    `bun:"playdate_id,pk"`
+	PlayerID   int    `bun:"player_id,pk"`
+	Attending  string `bun:"attending,notnull"`
+
+	// just relationship fields for bun to utilize
+	PlayDate *PlayDate `bun:"rel:belongs-to,join:playdate_id=id"`
+	Player   *Player   `bun:"rel:belongs-to,join:player_id=id"`
 }

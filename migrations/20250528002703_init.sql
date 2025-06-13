@@ -1,17 +1,19 @@
 -- +goose Up
 -- +goose StatementBegin
 CREATE TYPE status AS ENUM ('no', 'maybe', 'yes');
-CREATE TABLE IF NOT EXISTS playdate (
-    id SERIAL PRIMARY KEY,
-    game TEXT NOT NULL,
-    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    date TIMESTAMP NOT NULL
-);
 CREATE TABLE IF NOT EXISTS player (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
     discord_id TEXT NOT NULL,
     created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS playdate (
+    id SERIAL PRIMARY KEY,
+    game TEXT NOT NULL,
+    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    date TIMESTAMP NOT NULL,
+    owner_id INT NOT NULL,
+    FOREIGN KEY (owner_id) REFERENCES player(id)
 );
 CREATE TABLE IF NOT EXISTS playdate_player (
     playdate_id INT REFERENCES playdate(id),

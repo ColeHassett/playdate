@@ -7,24 +7,19 @@
 <div id="playdate">
     <div class="mb-3">
         <label for="nameInput" class="form-label">Name:</label>
-        <input type="text"
-               class="form-control"
-               id="nameInput"
-               value="{{ .PlayDate.Game }}" />
+        <input type="text" class="form-control" id="nameInput" value="{{ .PlayDate.Game }}" readonly />
+    </div>
+    <div class="mb-3">
+        <label for="ownerInput" class="form-label">Owner:</label>
+        <input type="text" class="form-control" id="ownerInput" value="{{ .PlayDate.Owner.Name }}" readonly />
     </div>
     <div class="mb-5">
         <label for="timeInput" class="form-label">Time:</label>
-        <input type="text"
-               class="form-control"
-               id="timeInput"
-               value="{{ .PlayDate.Date }}" />
+        <input type="text" class="form-control" id="timeInput" value="{{ .PlayDate.Date }}" readonly />
     </div>
     <div class="mb-5">
         <label for="timeInput" class="form-label">Created Date:</label>
-        <input type="text"
-               class="form-control"
-               id="timeInput"
-               value="{{ .PlayDate.CreatedDate }}" />
+        <input type="text" class="form-control" id="timeInput" value="{{ .PlayDate.CreatedDate }}" readonly />
     </div>
     {{ template "partials/players-table.html" . }}
 </div>
