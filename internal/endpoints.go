@@ -96,7 +96,13 @@ func (a *Api) index(c *gin.Context) {
 	// find playdates that are upcoming
 	upcomingPlaydates := []*PlayDate{}
 	nowEst := time.Now().UTC()
-	err = a.db.NewSelect().Model(&upcomingPlaydates).Relation("Players").Where("created_date <= ?", nowEst).Order("created_date asc").Scan(a.ctx)
+	err = a.db.NewSelect().
+		Model(&upcomingPlaydates).
+		Relation("Owner").
+		Relation("Players").
+		Where("play_date.created_date <= ?", nowEst).
+		Order("play_date.created_date asc").
+		Scan(a.ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to query for upcoming playdates")
 		state["ServerError"] = "Failed to retrieve upcoming playdates due to a server error. Please try again later."
@@ -104,7 +110,13 @@ func (a *Api) index(c *gin.Context) {
 
 	// find playdates in the past
 	pastPlaydates := []*PlayDate{}
-	err = a.db.NewSelect().Model(&pastPlaydates).Relation("Players").Where("created_date >= ?", nowEst).Order("created_date asc").Scan(a.ctx)
+	err = a.db.NewSelect().
+		Model(&pastPlaydates).
+		Relation("Owner").
+		Relation("Players").
+		Where("play_date.created_date >= ?", nowEst).
+		Order("play_date.created_date asc").
+		Scan(a.ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to query for past playdates")
 		state["ServerError"] = "Failed to retrieve past playdates due to a server error. Please try again later."
@@ -119,7 +131,7 @@ func (a *Api) showPlayDateForm(c *gin.Context) {
 }
 
 func (a *Api) createPlayDateTemplate(c *gin.Context) {
-	_, err := a.findPlayerFromCookie(c)
+	player, err := a.findPlayerFromCookie(c)
 	if err != nil {
 		c.Redirect(http.StatusFound, "/")
 		return
@@ -151,7 +163,7 @@ func (a *Api) createPlayDateTemplate(c *gin.Context) {
 		return
 	}
 
-	playdate := PlayDate{Game: inputGame, Date: parsedDatetime}
+	playdate := PlayDate{Game: inputGame, Date: parsedDatetime, OwnerId: player.ID}
 	_, err = a.db.NewInsert().Model(&playdate).Exec(a.ctx)
 	if err != nil {
 		log.Err(err).Any("playdate", playdate).Msg("failed to insert new playdate")
@@ -183,7 +195,7 @@ func (a *Api) getPlayDateTemplate(c *gin.Context) {
 
 	log.Info().Int("id", id).Msg("Querying for players related to playdate")
 	playdate := &PlayDate{ID: id}
-	err = a.db.NewSelect().Model(playdate).WherePK().Scan(c.Request.Context())
+	err = a.db.NewSelect().Model(playdate).Relation("Owner").WherePK().Scan(c.Request.Context())
 	if err != nil {
 		// if the given id doesn't exist just return the called to the home page
 		log.Err(err).Int("playdateID", id).Msg("failed to find playdate")

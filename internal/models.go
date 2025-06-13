@@ -46,8 +46,12 @@ type PlayDate struct {
 	CreatedDate time.Time      `bun:"created_date,nullzero,default:CURRENT_TIMESTAMP" json:"created_date"`
 	Game        string         `bun:"game,notnull" json:"game"`
 	Date        time.Time      `bun:"date,nullzero" json:"date"`
-	Players     []*Player      `bun:"m2m:playdate_player,join:PlayDate=Player"`
 	Status      PlayDateStatus `bun:"status,notnull,default:'pending',type:playdate_status"`
+	OwnerId     int            `bun:"owner_id,notnull"`
+
+	// just relationship fields for bun to utilize
+	Players []*Player `bun:"m2m:playdate_player,join:PlayDate=Player"`
+	Owner   *Player   `bun:"rel:belongs-to,join:owner_id=id"`
 }
 
 type Player struct {
@@ -63,8 +67,10 @@ type PlayDateToPlayer struct {
 	bun.BaseModel `bun:"table:playdate_player"`
 
 	PlayDateID int        `bun:"playdate_id,pk"`
-	PlayDate   *PlayDate  `bun:"rel:belongs-to,join:playdate_id=id"`
 	PlayerID   int        `bun:"player_id,pk"`
-	Player     *Player    `bun:"rel:belongs-to,join:player_id=id"`
 	Attending  Attendance `bun:"attending,notnull,default:'no',type:attendance"`
+
+	// just relationship fields for bun to utilize
+	PlayDate *PlayDate `bun:"rel:belongs-to,join:playdate_id=id"`
+	Player   *Player   `bun:"rel:belongs-to,join:player_id=id"`
 }
