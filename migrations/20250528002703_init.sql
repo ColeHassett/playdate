@@ -2,13 +2,6 @@
 -- +goose StatementBegin
 CREATE TYPE attendance AS ENUM ('no', 'maybe', 'yes');
 CREATE TYPE playdate_status AS ENUM ('pending', 'done');
-CREATE TABLE IF NOT EXISTS playdate (
-    id SERIAL PRIMARY KEY,
-    game TEXT NOT NULL,
-    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    date TIMESTAMP NOT NULL,
-    status playdate_status DEFAULT 'pending' NOT NULL
-);
 CREATE TABLE IF NOT EXISTS player (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
@@ -20,6 +13,7 @@ CREATE TABLE IF NOT EXISTS playdate (
     game TEXT NOT NULL,
     created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     date TIMESTAMP NOT NULL,
+    status playdate_status DEFAULT 'pending' NOT NULL,
     owner_id INT NOT NULL,
     FOREIGN KEY (owner_id) REFERENCES player(id)
 );
