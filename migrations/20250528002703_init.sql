@@ -5,6 +5,7 @@ CREATE TYPE playdate_status AS ENUM ('pending', 'done');
 CREATE TABLE IF NOT EXISTS player (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
+    password TEXT NOT NULL,
     discord_id TEXT NOT NULL,
     created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     verification_code VARCHAR(128) NOT NULL

@@ -1,15 +1,16 @@
 {{ define "partials/register.html" }}
 {{ if .ServerError }}
-<div>{{.ServerError}}</div>
+<div class="alert alert-danger" role="alert">{{.ServerError}}</div>
 {{ end }}
 <div id="registration">
-    <h3 class="">Register/Sign-in</h3>
-    <form class="{{- if .Errors -}} was-validated {{- else -}} needs-validated {{- end -}}"
+    <h3 class="">Register</h3>
+    <form class=""
         hx-post="{{- if .Verifying -}}/verify{{- else -}}/register{{- end -}}" hx-swap="outerHTML"
         hx-target="#registration" novalidate>
         <div class="mb-3">
             <label class="form-label" for="name">Name</label>
-            <input class="form-control" type="text" name="name" value="{{ .Name }}" required />
+            <input class="{{ if and (.Errors) (index .Errors "name") }}form-control is-invalid{{ else }}form-control{{ end }}" 
+                type="text" name="name" value="{{ .Name }}" required />
             {{- if .Errors }}
             {{- if index .Errors "name" }}
             <div class="invalid-feedback">{{ index .Errors "name" }}</div>
@@ -18,9 +19,23 @@
             {{- end }}
             {{- end }}
         </div>
+        <div class="mb-3 form-group">
+            <label class="form-label" for="password">Password</label>
+            <input class="{{ if and (.Errors) (index .Errors "password") }}form-control is-invalid{{ else }}form-control{{ end }}"
+                type="password" name="password" value="{{ .Password }}" aria-describedby="passwordHelp" required />
+            <small id="passwordHelp" class="form-text text-muted">Password must be alphanumeric</small>
+            {{- if .Errors }}
+            {{- if index .Errors "password" }}
+            <div class="invalid-feedback">{{ index .Errors "password" }}</div>
+            {{- else }}
+            <div class="valid-feedback"></div>
+            {{- end }}
+            {{- end }}
+        </div>
         <div class="mb-3">
             <label class="form-label" for="discID">Discord ID</label>
-            <input class="form-control" type="text" name="discID" value="{{ .DiscID }}" required />
+            <input class="{{ if and (.Errors) (index .Errors "discID") }}form-control is-invalid{{ else }}form-control{{ end }}" 
+                type="text" name="discID" value="{{ .DiscID }}" required />
             {{- if .Errors }}
             {{- if index .Errors "discID" }}
             <div class="invalid-feedback">{{ index .Errors "discID" }}</div>
@@ -44,6 +59,7 @@
         <button class="btn btn-primary" type="submit">Verify</button>
         {{ else}}
         <button class="btn btn-primary" type="submit">Register</button>
+        <button class="btn btn-primary" hx-get="/login" hx-swap="outerHTML" hx-target="#registration" novalidate>Login</button>
         {{ end }}
     </form>
 </div>
