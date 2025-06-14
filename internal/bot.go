@@ -8,63 +8,68 @@ import (
 
 var (
 	commands = []*discordgo.ApplicationCommand{
+		// {
+		// 	Name:        "hi",
+		// 	Description: "Say hello!",
+		// },
+		// {
+		// 	Name:        "bye",
+		// 	Description: "Say bye!",
+		// },
+		// {
+		// 	Name:        "games",
+		// 	Description: "See list of games",
+		// },
+		// {
+		// 	Name:        "join",
+		// 	Description: "Join a game to be notified when it's being played",
+		// 	Options: []*discordgo.ApplicationCommandOption{
+		// 		{
+		// 			Type:        discordgo.ApplicationCommandOptionString,
+		// 			Name:        "name",
+		// 			Description: "Name of the game to join",
+		// 			Required:    true,
+		// 		},
+		// 	},
+		// },
+		// {
+		// 	Name:        "leave",
+		// 	Description: "Leave the list of users linked to specified game",
+		// 	Options: []*discordgo.ApplicationCommandOption{
+		// 		{
+		// 			Type:        discordgo.ApplicationCommandOptionString,
+		// 			Name:        "name",
+		// 			Description: "Name of the game to leave",
+		// 			Required:    true,
+		// 		},
+		// 	},
+		// },
+		// {
+		// 	Name:        "add",
+		// 	Description: "Add a game to the game list",
+		// 	Options: []*discordgo.ApplicationCommandOption{
+		// 		{
+		// 			Type:        discordgo.ApplicationCommandOptionString,
+		// 			Name:        "name",
+		// 			Description: "Name of the game to add",
+		// 			Required:    true,
+		// 		},
+		// 	},
+		// },
 		{
-			Name:        "hi",
-			Description: "Say hello!",
-		},
-		{
-			Name:        "bye",
-			Description: "Say bye!",
-		},
-		{
-			Name:        "games",
-			Description: "See list of games",
-		},
-		{
-			Name:        "join",
-			Description: "Join a game to be notified when it's being played",
-			Options: []*discordgo.ApplicationCommandOption{
-				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "name",
-					Description: "Name of the game to join",
-					Required:    true,
-				},
-			},
-		},
-		{
-			Name:        "leave",
-			Description: "Leave the list of users linked to specified game",
-			Options: []*discordgo.ApplicationCommandOption{
-				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "name",
-					Description: "Name of the game to leave",
-					Required:    true,
-				},
-			},
-		},
-		{
-			Name:        "add",
-			Description: "Add a game to the game list",
-			Options: []*discordgo.ApplicationCommandOption{
-				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "name",
-					Description: "Name of the game to add",
-					Required:    true,
-				},
-			},
+			Name:        "idme",
+			Description: "Get your Discord User ID",
 		},
 	}
 
 	commandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate, botContext *BotContext){
-		"hi":    sayHello,
-		"bye":   sayBye,
-		"games": getGames,
-		"join":  joinGame,
-		"leave": leaveGame,
-		"add":   addGame,
+		// "hi":    sayHello,
+		// "bye":   sayBye,
+		// "games": getGames,
+		// "join":  joinGame,
+		// "leave": leaveGame,
+		// "add":   addGame,
+		"idme": getUserId,
 	}
 )
 
@@ -85,10 +90,15 @@ func createDiscordCommands(dg *discordgo.Session) ([]*discordgo.ApplicationComma
 	return registeredCommands, nil
 }
 
-func deleteDiscordCommands(dg *discordgo.Session, registeredCommands []*discordgo.ApplicationCommand) error {
+func deleteDiscordCommands(dg *discordgo.Session) error {
+	registeredCommands, err := dg.ApplicationCommands(dg.State.User.ID, Config.DiscordGuildID)
+	if err != nil {
+		return err
+	}
 	for _, v := range registeredCommands {
 		err := dg.ApplicationCommandDelete(dg.State.User.ID, Config.DiscordGuildID, v.ID)
 		if err != nil {
+			log.Err(err).Any("Command", v).Msg("Could not delete discord command")
 			return err
 		}
 	}
@@ -124,12 +134,14 @@ func createDiscordBot(errChan chan error, db *bun.DB) (dg *discordgo.Session) {
 	if err != nil {
 		errChan <- err
 	}
-	// commands, err := createDiscordCommands(dg)
+
+	// deleteDiscordCommands(dg)
+	_, err = createDiscordCommands(dg)
 	if err != nil {
 		errChan <- err
 	}
-	defer dg.Close()
-	defer deleteDiscordCommands(dg, commands)
+	// defer dg.Close()
+	// defer deleteDiscordCommands(dg, commands)
 
 	return dg
 
