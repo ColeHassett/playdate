@@ -426,30 +426,40 @@ func (a *Api) fetchPoppedDates() {
 
 	now := time.Now()
 	playdates := []*PlayDate{}
-	err := a.db.NewSelect().Model(&playdates).Relation("Owner").Relation("Players").Where("date <= ?", now.Format("2006-01-02T15:04")).Where("status = ?", PlayDateStatusPending).Scan(a.ctx)
+	err := a.db.NewSelect().
+		Model(&playdates).
+		Relation("Owner").
+		Relation("Attendances").
+		Relation("Attendances.Player"). // NOTE: this will prefetch the nested attendance relationship's player relationship :fire:
+		Where("date <= ?", now.Format("2006-01-02T15:04")).
+		Where("status = ?", PlayDateStatusPending).
+		Scan(a.ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Watch is Kill")
 		state["ServerError"] = "Watch Dead"
 	}
 
 	log.Info().Any("playdates", playdates).Msg("Found the following playdates")
-	for _, p := range playdates {
-		players := ""
-		for _, b := range p.Players {
-			players = players + fmt.Sprintf("<@%s>", b.DiscordID)
+	for _, playdate := range playdates {
+		atAttendingPlayers := ""
+		for _, attendance := range playdate.Attendances {
+			if attendance.Attending == AttendanceNo {
+				continue
+			}
+			atAttendingPlayers = atAttendingPlayers + fmt.Sprintf("<@%s>", attendance.Player.DiscordID)
 		}
-		msg := fmt.Sprintf("Playdate %s created by <@%s> is happening now! Make sure to join!! %s", p.Game, p.Owner.DiscordID, players)
+		msg := fmt.Sprintf("Playdate %s created by <@%s> is happening now! Make sure to join :video_game:!\n%s", playdate.Game, playdate.Owner.DiscordID, atAttendingPlayers)
 		_, err = a.dg.ChannelMessageSend(Config.DiscordChannelID, msg)
 		if err != nil {
-			log.Err(err).Any("playdate", p).Msg("failed to send message for playdate")
+			log.Err(err).Any("playdate", playdate).Msg("failed to send message for playdate")
 		}
 		// mark a playdate as done if its "popped"
-		p.Status = PlayDateStatusDone
-		_, err = a.db.NewUpdate().Model(p).WherePK().Exec(a.ctx)
+		playdate.Status = PlayDateStatusDone
+		_, err = a.db.NewUpdate().Model(playdate).WherePK().Exec(a.ctx)
 		if err != nil {
-			log.Err(err).Any("playdate", p).Msg("failed to update playdate status")
+			log.Err(err).Any("playdate", playdate).Msg("failed to update playdate status")
 		}
-		log.Info().Any("playdate", p).Msg("sent notification for playdate starting")
+		log.Info().Any("playdate", playdate).Str("notification", msg).Msg("sent notification for playdate starting")
 	}
 }
 

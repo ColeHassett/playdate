@@ -50,8 +50,9 @@ type PlayDate struct {
 	OwnerId     int            `bun:"owner_id,notnull"`
 
 	// just relationship fields for bun to utilize
-	Players []*Player `bun:"m2m:playdate_player,join:PlayDate=Player"`
-	Owner   *Player   `bun:"rel:belongs-to,join:owner_id=id"`
+	Players     []*Player           `bun:"m2m:playdate_player,join:PlayDate=Player"`
+	Owner       *Player             `bun:"rel:belongs-to,join:owner_id=id"`
+	Attendances []*PlayDateToPlayer `bun:"rel:has-many,join:id=playdate_id"`
 }
 
 type Player struct {
@@ -62,6 +63,10 @@ type Player struct {
 	Name             string    `bun:"name,notnull" json:"name"`
 	DiscordID        string    `bun:"discord_id,notnull" json:"discord_id"`
 	VerificationCode string    `bun:"verification_code,notnull" json:"verification_code"`
+
+	// just relationship fields for bun to utilize
+	Attendances []*PlayDateToPlayer `bun:"rel:has-many,join:id=player_id"`
+	PlayDates   []*PlayDate         `bun:"m2m:playdate_player,join:Player=PlayDate"`
 }
 
 type PlayDateToPlayer struct {
