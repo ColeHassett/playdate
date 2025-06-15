@@ -101,3 +101,12 @@ func extractPlayerFromDiscord(i *discordgo.InteractionCreate, db *bun.DB) *Playe
 	}
 	return &player
 }
+
+func getUserId(s *discordgo.Session, i *discordgo.InteractionCreate, botContext *BotContext) {
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: fmt.Sprintf("Your Discord User ID is %s", botContext.player.Name),
+		},
+	})
+}
