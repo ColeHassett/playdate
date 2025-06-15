@@ -558,8 +558,9 @@ func (a *Api) userLogin(c *gin.Context) {
 		return
 	}
 
+	player.Password = ""
 	val, _ := json.Marshal(player)
-	c.SetCookie("playdate", string(val), 0, "/", "", false, true)
+	c.SetCookie("playdate", string(val), 2000000, "/", "", false, true)
 	c.Status(http.StatusCreated)
 	c.Header("HX-Location", "/")
 }
