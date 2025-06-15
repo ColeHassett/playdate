@@ -4,9 +4,9 @@ CREATE TYPE attendance AS ENUM ('no', 'maybe', 'yes');
 CREATE TYPE playdate_status AS ENUM ('pending', 'done');
 CREATE TABLE IF NOT EXISTS player (
     id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL,
+    name TEXT NOT NULL UNIQUE,
     password TEXT NOT NULL,
-    discord_id TEXT NOT NULL,
+    discord_id TEXT NOT NULL UNIQUE,
     created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     verification_code VARCHAR(128) NOT NULL
 );
