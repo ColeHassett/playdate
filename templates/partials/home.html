@@ -22,7 +22,7 @@
                 <th scope="row">{{ .ID }}</th>
                 <td>{{ .Game }}</td>
                 <td>{{ .Owner.Name }}</td>
-                <td>{{ .Date }}</td>
+                <td>{{ .Date.Format "Jan 2 2006 at 03:04 PM" }}</td>
                 <td>{{ .Status }}</td>
                 <td>{{ len .Players }}</td>
                 {{ else }}
