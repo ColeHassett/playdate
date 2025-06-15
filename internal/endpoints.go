@@ -323,14 +323,15 @@ func (a *Api) registerUserTemplate(c *gin.Context) {
 
 	formData := gin.H{"Name": name, "DiscID": discID, "Password": pass}
 	errors := map[string]string{}
+	r, _ := regexp.Compile("[^a-zA-Z0-9]")
 	if name == "" {
 		errors["name"] = "name is required"
+	} else if r.MatchString(name) {
+		errors["password"] = "name must be alphanumeric"
 	}
 	if discID == "" {
 		errors["discID"] = "discID is required"
 	}
-	r, _ := regexp.Compile("[^a-zA-Z0-9]")
-	log.Info().Any("regex", r.MatchString(pass)).Msg("Pass Regex Test")
 	if pass == "" {
 		errors["password"] = "password is required"
 	} else if r.MatchString(pass) {
