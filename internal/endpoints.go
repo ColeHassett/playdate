@@ -357,6 +357,12 @@ func (a *Api) registerUserTemplate(c *gin.Context) {
 	}
 
 	bytes, err := bcrypt.GenerateFromPassword([]byte(c.PostForm("password")), bcrypt.DefaultCost)
+	if err != nil {
+		log.Err(err).Msg("failed to hash password")
+		formData["ServerError"] = err.Error()
+		c.HTML(http.StatusOK, "partials/register.html", formData)
+		return
+	}
 
 	player = Player{Name: name, DiscordID: discID, Password: string(bytes)}
 	err = a.db.NewSelect().Model(&player).Where("discord_id = ?", player.DiscordID).Scan(a.ctx)
