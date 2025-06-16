@@ -11,12 +11,15 @@
     </div>
     <div class="mb-5">
         <label for="timeInput" class="form-label">Time:</label>
-        <input type="text" class="form-control" id="timeInput" aria-describedby="timeInputHelp" value="{{ .PlayDate.Date }}" readonly />
-        <small id="timeInputHelp" class="form-text text-muted">{{ .PlayDate.Date.Format "Jan 2 2006 at 03:04 PM" }}</small>
+        <input type="text" class="form-control" id="timeInput" aria-describedby="timeInputHelp"
+            value="{{ .PlayDate.Date | formatTime }}" readonly />
+        <small id="timeInputHelp" class="form-text text-muted">Raw value: {{ .PlayDate.Date }}</small>
     </div>
     <div class="mb-5">
         <label for="timeInput" class="form-label">Created Date:</label>
-        <input type="text" class="form-control" id="timeInput" value="{{ .PlayDate.CreatedDate }}" readonly />
+        <input type="text" class="form-control" id="timeInput" value="{{ .PlayDate.CreatedDate | formatTime }}"
+            readonly />
+        <small id="timeInputHelp" class="form-text text-muted">Raw value: {{ .PlayDate.CreatedDate }}</small>
     </div>
     <div class="mb-5">
         <label for="timeInput" class="form-label">Status:</label>

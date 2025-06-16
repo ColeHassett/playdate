@@ -43,6 +43,12 @@ func StartAPI(db *bun.DB, dg *discordgo.Session) {
 		logger.WithServerErrorLevel(zerolog.ErrorLevel), // Level for 5xx errors
 	))
 
+	// custom template functions
+	router.SetFuncMap(template.FuncMap{
+		"formatTime":   formatTime,
+		"relativeTime": relativeTime,
+	})
+
 	// Template Endpoints
 	router.LoadHTMLGlob(fmt.Sprintf("%s/**/*.html", Config.TemplateDirectory))
 	router.StaticFile("custom-colors.css", fmt.Sprintf("%s/custom-colors.css", Config.TemplateDirectory))
@@ -61,11 +67,6 @@ func StartAPI(db *bun.DB, dg *discordgo.Session) {
 	// Navigate around?
 	router.GET("/register", api.goToRegisterUser)
 	router.GET("/login", api.goToLogin)
-
-	// custom template functions
-	router.SetFuncMap(template.FuncMap{
-		"relativeTime": formatRelative,
-	})
 
 	go api.watchDog()
 	router.Run("0.0.0.0:8080")
