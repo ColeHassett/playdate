@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -53,6 +54,15 @@ func StartAPI(db *bun.DB, dg *discordgo.Session) {
 	router.POST("/playdate/:id/yes", api.setPlayDateAttendence)
 	router.POST("/playdate/:id/maybe", api.setPlayDateAttendence)
 	router.POST("/playdate/:id/no", api.setPlayDateAttendence)
+
+	// Navigate around?
+	router.GET("/register", api.goToRegisterUser)
+	router.GET("/login", api.goToLogin)
+
+	// custom template functions
+	router.SetFuncMap(template.FuncMap{
+		"relativeTime": formatRelative,
+	})
 
 	go api.watchDog()
 	router.Run("0.0.0.0:8080")
