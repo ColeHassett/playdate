@@ -113,7 +113,7 @@ func createDiscordBot(errChan chan error, db *bun.DB) (dg *discordgo.Session) {
 		errChan <- err
 	}
 
-	// log.Println("Adding Bot handlers.")
+	log.Info().Msg("Adding Bot handlers.")
 	dg.AddHandler(func(session *discordgo.Session, interaction *discordgo.InteractionCreate) {
 		if handler, ok := commandHandlers[interaction.ApplicationCommandData().Name]; ok {
 			botContext := &BotContext{
@@ -129,29 +129,34 @@ func createDiscordBot(errChan chan error, db *bun.DB) (dg *discordgo.Session) {
 	})
 
 	// Open websocket connection to discord
-	// log.Println("Opening websocket to Discord...")
+	log.Info().Msg("Opening websocket to Discord...")
 	err = dg.Open()
 	if err != nil {
 		errChan <- err
 	}
 
 	// deleteDiscordCommands(dg)
+	log.Info().Msg("Creating Discord Commands...")
 	_, err = createDiscordCommands(dg)
 	if err != nil {
 		errChan <- err
 	}
+	// defer dg.AddHandler(func(s *discordgo.Session, event *discordgo.Ready) {
+	// 	s.ChannelMessageSend(Config.DiscordChannelID, "Nap time....😴")
+	// })
 	// defer dg.Close()
-	// defer deleteDiscordCommands(dg, commands)
-
-	return dg
+	// defer deleteDiscordCommands(dg)
 
 	// Wait for ctrl+c to close app
 	// log.Println("Started Discord Bot. Waiting on commands")
 	// sc := make(chan os.Signal, 1)
-	// signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+	// signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM)
 	// <-sc
-
 	// errChan <- nil
+
+	log.Info().Msg("Discord Bot Started")
+	return dg
+
 }
 
 func StartDiscordBot(db *bun.DB) (dg *discordgo.Session) {
@@ -161,4 +166,16 @@ func StartDiscordBot(db *bun.DB) (dg *discordgo.Session) {
 	// if errors != nil {
 	// 	log.Err(errors)
 	// }
+}
+
+func StopDiscordBot(dg *discordgo.Session) {
+	log.Info().Msg("Removing Discord Commands..")
+	_, err := dg.ApplicationCommandBulkOverwrite(dg.State.User.ID, "", []*discordgo.ApplicationCommand{})
+	if err != nil {
+		log.Err(err).Msg("Could not delete discord commands")
+	}
+	log.Info().Msg("Done Removing Discord Commands!")
+	dg.ChannelMessageSend(Config.DiscordChannelID, "Nap time....😴")
+	dg.Close()
+	log.Info().Msg("Discord Bot Successfully Shutdown")
 }

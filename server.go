@@ -5,6 +5,8 @@ import (
 	"embed"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"uc181discord/games/bot/internal"
 
 	"github.com/pressly/goose/v3"
@@ -22,6 +24,8 @@ var embedMigrations embed.FS
 func main() {
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
+	sc := make(chan os.Signal, 1)
+	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM)
 
 	// note that this is path referenced from within the docker container
 	banner, err := os.ReadFile("banner.txt")
@@ -54,5 +58,10 @@ func main() {
 	}
 
 	dg := internal.StartDiscordBot(db) // start discord bot on main process
-	internal.StartAPI(db, dg)          // start webserver on subprocess
+	defer internal.StopDiscordBot(dg)
+	go internal.StartAPI(db, dg) // start webserver on subprocess
+
+	// die?
+	<-sc
+
 }
