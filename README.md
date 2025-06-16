@@ -27,8 +27,22 @@ The http server will be available at `localhost:8080`.
 
 And thats it! Now you can change files locally and your go http server will live reload based on them without having to restart your docker compose command or rebuilding your entire docker image.
 
-**Note** if you are lazy like you can use just instead of all of that typing
+### Using Air on Windows with Docker
+
+You will need to set ```poll = true``` in your .air.toml file on Windows for live reload to work.
+
+## Optional: Running PlayDate Using Just
+
+**Note** if you are lazy you can use just instead of all of that typing
 ```shell
 just
 ```
+
+### Using Powershell on Windows with Just
+
+You will need to add the following line to the top of your justfile if using powershell to run just:
+```shell
+set shell := ["powershell.exe", "-c"]
+```
+
 
