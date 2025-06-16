@@ -91,6 +91,7 @@ func createDiscordCommands(dg *discordgo.Session) ([]*discordgo.ApplicationComma
 }
 
 func deleteDiscordCommands(dg *discordgo.Session) error {
+	log.Info().Msg("Removing Discord Commands..")
 	registeredCommands, err := dg.ApplicationCommands(dg.State.User.ID, Config.DiscordGuildID)
 	if err != nil {
 		return err
@@ -102,6 +103,7 @@ func deleteDiscordCommands(dg *discordgo.Session) error {
 			return err
 		}
 	}
+	log.Info().Msg("Done Removing Discord Commands!")
 	return nil
 }
 
@@ -169,12 +171,7 @@ func StartDiscordBot(db *bun.DB) (dg *discordgo.Session) {
 }
 
 func StopDiscordBot(dg *discordgo.Session) {
-	log.Info().Msg("Removing Discord Commands..")
-	_, err := dg.ApplicationCommandBulkOverwrite(dg.State.User.ID, "", []*discordgo.ApplicationCommand{})
-	if err != nil {
-		log.Err(err).Msg("Could not delete discord commands")
-	}
-	log.Info().Msg("Done Removing Discord Commands!")
+	deleteDiscordCommands(dg)
 	dg.ChannelMessageSend(Config.DiscordChannelID, "Nap time....😴")
 	dg.Close()
 	log.Info().Msg("Discord Bot Successfully Shutdown")
