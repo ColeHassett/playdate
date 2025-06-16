@@ -13,6 +13,7 @@
             <th scope="col">Game</th>
             <th scope="col">Owner</th>
             <th scope="col">Date & Time</th>
+            <th scope="col">Count Down</th>
             <th scope="col">Status</th>
             <th scope="col"># Signed up Players</th>
         </thead>
@@ -22,12 +23,14 @@
                 <th scope="row">{{ .ID }}</th>
                 <td>{{ .Game }}</td>
                 <td>{{ .Owner.Name }}</td>
-                <td>{{ .Date.Format "Jan 2 2006 at 03:04 PM" }}</td>
+                <td>{{ .Date | formatTime }}</td>
+                <td>{{ .Date | relativeTime }}</td>
                 <td>{{ .Status }}</td>
                 <td>{{ len .Players }}</td>
                 {{ else }}
             <tr>
                 <th scope="row">No PlayDates scheduled.</th>
+                <td></td>
                 <td></td>
                 <td></td>
                 <td></td>

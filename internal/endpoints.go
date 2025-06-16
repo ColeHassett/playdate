@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -41,6 +42,12 @@ func StartAPI(db *bun.DB, dg *discordgo.Session) {
 		logger.WithClientErrorLevel(zerolog.WarnLevel),  // Level for 4xx errors
 		logger.WithServerErrorLevel(zerolog.ErrorLevel), // Level for 5xx errors
 	))
+
+	// custom template functions
+	router.SetFuncMap(template.FuncMap{
+		"formatTime":   formatTime,
+		"relativeTime": relativeTime,
+	})
 
 	// Template Endpoints
 	router.LoadHTMLGlob(fmt.Sprintf("%s/**/*.html", Config.TemplateDirectory))
