@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"text/template"
@@ -18,6 +19,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/uptrace/bun"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -46,6 +48,7 @@ func StartAPI(db *bun.DB, dg *discordgo.Session) {
 	router.StaticFile("custom-colors.css", fmt.Sprintf("%s/custom-colors.css", Config.TemplateDirectory))
 	// Templated endpoints
 	router.GET("/", api.index)
+	router.POST("/login", api.userLogin)
 	router.POST("/register", api.registerUserTemplate)
 	router.POST("/verify", api.verifyPlayer)
 	router.GET("/playdate", api.showPlayDateForm)
@@ -322,14 +325,35 @@ func (a *Api) setPlayDateAttendence(c *gin.Context) {
 func (a *Api) registerUserTemplate(c *gin.Context) {
 	name := c.PostForm("name")
 	discID := c.PostForm("discID")
+	pass := c.PostForm("password")
 
-	formData := gin.H{"Name": name, "DiscID": discID, "Verifying": true}
+	formData := gin.H{"Name": name, "DiscID": discID, "Password": pass}
 	errors := map[string]string{}
+	r, _ := regexp.Compile("[^a-zA-Z0-9]")
 	if name == "" {
 		errors["name"] = "name is required"
+	} else if r.MatchString(name) {
+		errors["password"] = "name must be alphanumeric"
 	}
 	if discID == "" {
 		errors["discID"] = "discID is required"
+	}
+	if pass == "" {
+		errors["password"] = "password is required"
+	} else if r.MatchString(pass) {
+		errors["password"] = "password must be alphanumeric"
+	}
+
+	player := Player{Name: name}
+	duplicate, err := a.db.NewSelect().Model(&player).Where("name = ?", player.Name).Exists(a.ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to check DB for existing username")
+		formData["ServerError"] = "Not your fault, server is cooked. Try again?"
+		c.HTML(http.StatusOK, "partials/register.html", formData)
+		return
+	}
+	if duplicate {
+		errors["name"] = "name is taken"
 	}
 	if len(errors) > 0 {
 		formData["Errors"] = errors
@@ -338,8 +362,16 @@ func (a *Api) registerUserTemplate(c *gin.Context) {
 		return
 	}
 
-	player := Player{Name: name, DiscordID: discID}
-	err := a.db.NewSelect().Model(&player).Where("discord_id = ?", player.DiscordID).Scan(a.ctx)
+	bytes, err := bcrypt.GenerateFromPassword([]byte(c.PostForm("password")), bcrypt.DefaultCost)
+	if err != nil {
+		log.Err(err).Msg("failed to hash password")
+		formData["ServerError"] = err.Error()
+		c.HTML(http.StatusOK, "partials/register.html", formData)
+		return
+	}
+
+	player = Player{Name: name, DiscordID: discID, Password: string(bytes)}
+	err = a.db.NewSelect().Model(&player).Where("discord_id = ?", player.DiscordID).Scan(a.ctx)
 	if err != nil {
 		player.VerificationCode = uuid.NewString()
 		_, err := a.db.NewInsert().Model(&player).Exec(a.ctx)
@@ -364,7 +396,7 @@ func (a *Api) registerUserTemplate(c *gin.Context) {
 	channel, err := a.dg.UserChannelCreate(discID)
 	if err != nil {
 		log.Err(err).Any("player", player).Msg("failed to create private channel to send verification code")
-		formData["ServerError"] = err.Error()
+		formData["ServerError"] = "Invalid Discord ID"
 		c.HTML(http.StatusOK, "partials/register.html", formData)
 		return
 	}
@@ -379,6 +411,7 @@ func (a *Api) registerUserTemplate(c *gin.Context) {
 		return
 	}
 
+	formData["Verifying"] = true
 	c.HTML(http.StatusOK, "partials/register.html", formData)
 }
 
@@ -497,4 +530,59 @@ func (a *Api) findPlayerFromCookie(c *gin.Context) (*Player, error) {
 		return nil, errors.New(msg)
 	}
 	return player, nil
+}
+
+func (a *Api) goToRegisterUser(c *gin.Context) {
+	state := gin.H{}
+	state["ServerError"] = nil
+	c.HTML(http.StatusOK, "partials/register.html", state)
+}
+
+func (a *Api) goToLogin(c *gin.Context) {
+	state := gin.H{}
+	state["ServerError"] = nil
+	c.HTML(http.StatusOK, "partials/login.html", state)
+}
+
+func (a *Api) userLogin(c *gin.Context) {
+	name := c.PostForm("name")
+	pass := c.PostForm("password")
+
+	formData := gin.H{"Name": name, "Password": pass}
+	errors := map[string]string{}
+	if name == "" {
+		errors["name"] = "name is required"
+	}
+	if pass == "" {
+		errors["pass"] = "password is required"
+	}
+	if len(errors) > 0 {
+		formData["Errors"] = errors
+		log.Debug().Any("errors", errors).Msg("form data didn't meet validation")
+		c.HTML(http.StatusOK, "partials/login.html", formData)
+		return
+	}
+
+	player := Player{Name: name}
+	err := a.db.NewSelect().Model(&player).Where("name = ?", player.Name).Scan(a.ctx)
+	if err != nil {
+		log.Err(err).Any("player", player).Msg("failed to find player")
+		formData["ServerError"] = "User doesn't exist"
+		c.HTML(http.StatusOK, "partials/login.html", formData)
+		return
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(player.Password), []byte(pass))
+	if err != nil {
+		log.Err(err).Any("player", player).Msg("Invalid Password")
+		formData["ServerError"] = "Invalid Password"
+		c.HTML(http.StatusOK, "partials/login.html", formData)
+		return
+	}
+
+	player.Password = ""
+	val, _ := json.Marshal(player)
+	c.SetCookie("playdate", string(val), 2000000, "/", "", false, true)
+	c.Status(http.StatusCreated)
+	c.Header("HX-Location", "/")
 }
