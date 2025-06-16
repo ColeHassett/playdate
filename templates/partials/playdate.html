@@ -11,7 +11,7 @@
     </div>
     <div class="mb-5">
         <label for="timeInput" class="form-label">Time:</label>
-        <input type="text" class="form-control" id="timeInput" aria-describedby="passwordHelp" value="{{ .PlayDate.Date }}" readonly />
+        <input type="text" class="form-control" id="timeInput" aria-describedby="timeInputHelp" value="{{ .PlayDate.Date }}" readonly />
         <small id="timeInputHelp" class="form-text text-muted">{{ .PlayDate.Date.Format "Jan 2 2006 at 03:04 PM" }}</small>
     </div>
     <div class="mb-5">
