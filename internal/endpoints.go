@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -41,6 +42,12 @@ func StartAPI(db *bun.DB, dg *discordgo.Session) {
 		logger.WithClientErrorLevel(zerolog.WarnLevel),  // Level for 4xx errors
 		logger.WithServerErrorLevel(zerolog.ErrorLevel), // Level for 5xx errors
 	))
+
+	// custom template functions
+	router.SetFuncMap(template.FuncMap{
+		"formatTime":   formatTime,
+		"relativeTime": relativeTime,
+	})
 
 	// Template Endpoints
 	router.LoadHTMLGlob(fmt.Sprintf("%s/**/*.html", Config.TemplateDirectory))
@@ -201,8 +208,8 @@ func (a *Api) createPlayDateTemplate(c *gin.Context) {
 	}
 
 	// send notification to configure channel to share the new playdate to the masses!
-	msg := fmt.Sprintf("Playdate %s at %s by %s! Check it out here: https://playdate.colinthatcher.dev/playdate/%d", playdate.Game, playdate.Date, player.Name, playdate.ID)
-	dgMsg, err := a.dg.ChannelMessageSend(Config.DiscordChannelID, msg)
+	msg := fmt.Sprintf("Playdate %s at %s by %s! Check it out here: https://playdate.colinthatcher.dev/playdate/%d", playdate.Game, formatTime(&playdate.Date), player.Name, playdate.ID)
+	dgMsg, err = a.dg.ChannelMessageSend(Config.DiscordChannelID, msg)
 	if err != nil {
 		log.Err(err).Any("playdate", playdate).Msg("failed to send message for new playdate to discord")
 	}

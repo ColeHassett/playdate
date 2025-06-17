@@ -23,7 +23,7 @@
         </div>
         <div class="mb-3">
             <label class="form-label" for="date">Date/Time</label>
-            <input class="form-control" type="datetime-local" name="date" value="{{ .Date }}" required />
+            <input class="form-control" type="datetime-local" name="date" value="{{ .Date | formatTime }}" required />
             {{- if .Errors }}
             {{- if index .Errors "date" }}
             <div class="invalid-feedback">{{ index .Errors "date" }}</div>
