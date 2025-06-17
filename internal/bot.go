@@ -8,54 +8,6 @@ import (
 
 var (
 	commands = []*discordgo.ApplicationCommand{
-		// {
-		// 	Name:        "hi",
-		// 	Description: "Say hello!",
-		// },
-		// {
-		// 	Name:        "bye",
-		// 	Description: "Say bye!",
-		// },
-		// {
-		// 	Name:        "games",
-		// 	Description: "See list of games",
-		// },
-		// {
-		// 	Name:        "join",
-		// 	Description: "Join a game to be notified when it's being played",
-		// 	Options: []*discordgo.ApplicationCommandOption{
-		// 		{
-		// 			Type:        discordgo.ApplicationCommandOptionString,
-		// 			Name:        "name",
-		// 			Description: "Name of the game to join",
-		// 			Required:    true,
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	Name:        "leave",
-		// 	Description: "Leave the list of users linked to specified game",
-		// 	Options: []*discordgo.ApplicationCommandOption{
-		// 		{
-		// 			Type:        discordgo.ApplicationCommandOptionString,
-		// 			Name:        "name",
-		// 			Description: "Name of the game to leave",
-		// 			Required:    true,
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	Name:        "add",
-		// 	Description: "Add a game to the game list",
-		// 	Options: []*discordgo.ApplicationCommandOption{
-		// 		{
-		// 			Type:        discordgo.ApplicationCommandOptionString,
-		// 			Name:        "name",
-		// 			Description: "Name of the game to add",
-		// 			Required:    true,
-		// 		},
-		// 	},
-		// },
 		{
 			Name:        "idme",
 			Description: "Get your Discord User ID",
@@ -63,12 +15,6 @@ var (
 	}
 
 	commandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate, botContext *BotContext){
-		// "hi":    sayHello,
-		// "bye":   sayBye,
-		// "games": getGames,
-		// "join":  joinGame,
-		// "leave": leaveGame,
-		// "add":   addGame,
 		"idme": getUserId,
 	}
 )
@@ -99,7 +45,7 @@ func deleteDiscordCommands(dg *discordgo.Session) error {
 	for _, v := range registeredCommands {
 		err := dg.ApplicationCommandDelete(dg.State.User.ID, Config.DiscordGuildID, v.ID)
 		if err != nil {
-			log.Err(err).Any("Command", v).Msg("Could not delete discord command")
+			log.Err(err).Any("Command", v).Msg("Could not delete Discord command")
 			return err
 		}
 	}
@@ -107,12 +53,26 @@ func deleteDiscordCommands(dg *discordgo.Session) error {
 	return nil
 }
 
-func createDiscordBot(errChan chan error, db *bun.DB) (dg *discordgo.Session) {
+func InitAttendanceReactions(a *Api, msg *discordgo.Message) {
+	log.Info().Msg("Adding Reactions to playdate")
+	a.dg.MessageReactionAdd(Config.DiscordChannelID, msg.ID, "👍")
+	a.dg.MessageReactionAdd(Config.DiscordChannelID, msg.ID, "🤔")
+	a.dg.MessageReactionAdd(Config.DiscordChannelID, msg.ID, "👎")
+}
+
+func handleReactionAdd(dg *discordgo.Session, event *discordgo.MessageReactionAdd) {
+
+}
+
+func handleReactionRemove(dg *discordgo.Session, event *discordgo.MessageReactionRemove) {
+
+}
+
+func createDiscordBot(db *bun.DB) (dg *discordgo.Session) {
 	log.Info().Msg("Attempting to start Discord Bot.")
 	dg, err := discordgo.New("Bot " + Config.DiscordAPIKey)
 	if err != nil {
-		log.Err(err).Msg("failed to create discord client")
-		errChan <- err
+		log.Err(err).Msg("failed to create Discord client")
 	}
 
 	log.Info().Msg("Adding Bot handlers.")
@@ -125,7 +85,12 @@ func createDiscordBot(errChan chan error, db *bun.DB) (dg *discordgo.Session) {
 			handler(session, interaction, botContext)
 		}
 	})
-
+	dg.AddHandler(func(s *discordgo.Session, event *discordgo.MessageReactionAdd) {
+		handleReactionAdd(s, event)
+	})
+	dg.AddHandler(func(s *discordgo.Session, event *discordgo.MessageReactionRemove) {
+		handleReactionRemove(s, event)
+	})
 	dg.AddHandler(func(s *discordgo.Session, event *discordgo.Ready) {
 		s.ChannelMessageSend(Config.DiscordChannelID, "Let's Play!")
 	})
@@ -134,27 +99,14 @@ func createDiscordBot(errChan chan error, db *bun.DB) (dg *discordgo.Session) {
 	log.Info().Msg("Opening websocket to Discord...")
 	err = dg.Open()
 	if err != nil {
-		errChan <- err
+		log.Err(err).Msg("failed to open websocket to Discord")
 	}
 
-	// deleteDiscordCommands(dg)
 	log.Info().Msg("Creating Discord Commands...")
 	_, err = createDiscordCommands(dg)
 	if err != nil {
-		errChan <- err
+		log.Err(err).Msg("failed to create Discord commands")
 	}
-	// defer dg.AddHandler(func(s *discordgo.Session, event *discordgo.Ready) {
-	// 	s.ChannelMessageSend(Config.DiscordChannelID, "Nap time....😴")
-	// })
-	// defer dg.Close()
-	// defer deleteDiscordCommands(dg)
-
-	// Wait for ctrl+c to close app
-	// log.Println("Started Discord Bot. Waiting on commands")
-	// sc := make(chan os.Signal, 1)
-	// signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM)
-	// <-sc
-	// errChan <- nil
 
 	log.Info().Msg("Discord Bot Started")
 	return dg
@@ -162,12 +114,7 @@ func createDiscordBot(errChan chan error, db *bun.DB) (dg *discordgo.Session) {
 }
 
 func StartDiscordBot(db *bun.DB) (dg *discordgo.Session) {
-	errorChan := make(chan error)
-	return createDiscordBot(errorChan, db)
-	// errors := <-errorChan
-	// if errors != nil {
-	// 	log.Err(errors)
-	// }
+	return createDiscordBot(db)
 }
 
 func StopDiscordBot(dg *discordgo.Session) {

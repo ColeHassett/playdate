@@ -202,10 +202,11 @@ func (a *Api) createPlayDateTemplate(c *gin.Context) {
 
 	// send notification to configure channel to share the new playdate to the masses!
 	msg := fmt.Sprintf("Playdate %s at %s by %s! Check it out here: https://playdate.colinthatcher.dev/playdate/%d", playdate.Game, playdate.Date, player.Name, playdate.ID)
-	_, err = a.dg.ChannelMessageSend(Config.DiscordChannelID, msg)
+	dgMsg, err := a.dg.ChannelMessageSend(Config.DiscordChannelID, msg)
 	if err != nil {
 		log.Err(err).Any("playdate", playdate).Msg("failed to send message for new playdate to discord")
 	}
+	InitAttendanceReactions(a, dgMsg)
 
 	// redirect the user back to the index router (i.e. the homepage)
 	c.Header("HX-Location", "/")
