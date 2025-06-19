@@ -1,3 +1,0 @@
-* rename callback url
-* add new callback url in discord application
-* new pr with formatting and mise changes
