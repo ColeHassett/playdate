@@ -368,6 +368,7 @@ func (a *Api) setPlayDateAttendenceFromDisc(r *discordgo.MessageReaction) {
 	}
 	if playdate.Status != PlayDateStatusPending {
 		log.Debug().Msg("PlayDate already happened")
+		return
 	}
 
 	log.Info().Int("playdateID", playdate.ID).Str("discordId", discId).Any("action", attendance).Msg("attempting to set playdate attendance")
