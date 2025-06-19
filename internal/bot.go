@@ -77,9 +77,6 @@ func createDiscordBot(db *bun.DB) (dg *discordgo.Session) {
 			handler(session, interaction, botContext)
 		}
 	})
-	dg.AddHandler(func(s *discordgo.Session, event *discordgo.Ready) {
-		s.ChannelMessageSend(Config.DiscordChannelID, "Let's Play!")
-	})
 
 	// Open websocket connection to discord
 	log.Info().Msg("Opening websocket to Discord...")
