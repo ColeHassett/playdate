@@ -1,46 +1,72 @@
 {{ define "partials/players-table.html" }}
-{{ if .Errors }}
-{{ if .Errors.PlayDatePlayers }}
-<div>{{.Errors.PlayDatePlayers}}</div>
-{{ end }}
-{{ end }}
-<table id="players-table" class="table table-striped table-hover table-responsive">
+  {{ if .Errors }}
+    {{ if
+      .Errors.PlayDatePlayers
+    }}
+      <div>{{ .Errors.PlayDatePlayers }}</div>
+    {{ end }}
+  {{ end }}
+  <table
+    id="players-table"
+    class="table table-striped table-hover table-responsive"
+  >
     <thead>
-        <tr>
-            <th scope="col">Name</th>
-            <th scope="col">Attendence</th>
-            <th scope="col">
-                <div class="btn-group" role="group">
-                    <button type="button" class="btn btn-primary" hx-post="/playdate/{{ .PlayDate.ID }}/yes"
-                        hx-target="#players-table" hx-swap="outerHTML">Sign up</button>
-                    <button type="button" class="btn btn-secondary" hx-post="/playdate/{{ .PlayDate.ID }}/maybe"
-                        hx-target="#players-table" hx-swap="outerHTML">Maybe</button>
-                    <button type="button" class="btn btn-danger" hx-post="/playdate/{{ .PlayDate.ID }}/no"
-                        hx-target="#players-table" hx-swap="outerHTML">No</button>
-                </div>
-            </th>
-        </tr>
+      <tr>
+        <th scope="col">Name</th>
+        <th scope="col">Attendence</th>
+        <th scope="col">
+          <div class="btn-group" role="group">
+            <button
+              type="button"
+              class="btn btn-primary"
+              hx-post="/playdate/{{ .PlayDate.ID }}/yes"
+              hx-target="#players-table"
+              hx-swap="outerHTML"
+            >
+              Sign up
+            </button>
+            <button
+              type="button"
+              class="btn btn-secondary"
+              hx-post="/playdate/{{ .PlayDate.ID }}/maybe"
+              hx-target="#players-table"
+              hx-swap="outerHTML"
+            >
+              Maybe
+            </button>
+            <button
+              type="button"
+              class="btn btn-danger"
+              hx-post="/playdate/{{ .PlayDate.ID }}/no"
+              hx-target="#players-table"
+              hx-swap="outerHTML"
+            >
+              No
+            </button>
+          </div>
+        </th>
+      </tr>
     </thead>
     <tbody>
-        {{ range .PlayDatePlayers }}
+      {{ range .PlayDatePlayers }}
         <tr>
-            <td scope="row">{{ .Player.Name }}</td>
-            <td scope="row">{{ .Attending }}</td>
-            <td>
-                <!-- Add a cell to align with the header buttons -->
-            </td>
+          <td scope="row">{{ .Player.Name }}</td>
+          <td scope="row">{{ .Attending }}</td>
+          <td>
+            <!-- Add a cell to align with the header buttons -->
+          </td>
         </tr>
-        {{ else }}
+      {{ else }}
         <tr>
-            <td scope="row">No players are signed up yet.. T.T</td>
-            <td>
-                <!-- Add a cell to align with the header buttons -->
-            </td>
-            <td>
-                <!-- Add a cell to align with the header buttons -->
-            </td>
+          <td scope="row">No players are signed up yet.. T.T</td>
+          <td>
+            <!-- Add a cell to align with the header buttons -->
+          </td>
+          <td>
+            <!-- Add a cell to align with the header buttons -->
+          </td>
         </tr>
-        {{ end }}
+      {{ end }}
     </tbody>
-</table>
+  </table>
 {{ end }}

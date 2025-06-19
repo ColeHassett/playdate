@@ -29,7 +29,13 @@ And thats it! Now you can change files locally and your go http server will live
 
 ### Using Air on Windows with Docker
 
-You will need to set ```poll = true``` in your .air.toml file on Windows for live reload to work.
+You will need to set the following in your .air.toml file on Windows for live reload to work:
+~~~
+bin = "tmp/main.exe"
+cmd = "go build -o ./tmp/main.exe ."
+...
+poll = true
+~~~
 
 ## Optional: Running PlayDate Using Just
 

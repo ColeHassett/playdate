@@ -30,9 +30,9 @@ const (
 
 func AttendanceFrom(s string) Attendance {
 	switch s {
-	case string(AttendanceYes):
+	case string(AttendanceYes), "👍":
 		return AttendanceYes
-	case string(AttendanceMaybe):
+	case string(AttendanceMaybe), "🤔":
 		return AttendanceMaybe
 	default:
 		return AttendanceNo
