@@ -736,7 +736,7 @@ func (a *Api) handleOAuthCallback(c *gin.Context) {
 }
 
 func getGithubReleaseNotes() (g GitHubRelease) {
-	url := "https://api.github.com/repos/colehassett/playdate/releases/tags/release"
+	url := "https://api.github.com/repos/colehassett/playdate/releases/latest"
 
 	// Create a new HTTP client with a timeout
 	client := &http.Client{Timeout: 10 * time.Second}
