@@ -5,10 +5,16 @@ Schedule dates to play games with your friends. 🙂
 # Contributing
 
 ## Dependencies
-* go
-* docker or podman
-* equivalent compose runner
-* _optional_: [just](https://github.com/casey/just?tab=readme-ov-file#installation)
+
+- go
+- docker or podman
+- equivalent compose runner
+- _optional_: [just](https://github.com/casey/just?tab=readme-ov-file#installation)
+
+When using mise you can to install the pinned versions of the software in `mise.toml`
+```shell
+mise install
+```
 
 ## Running Locally
 
@@ -19,6 +25,7 @@ cp .env.example .env
 ```
 
 To run locally start using the provider docker compose
+
 ```shell
 docker-compose up --build
 ```
@@ -30,16 +37,18 @@ And thats it! Now you can change files locally and your go http server will live
 ### Using Air on Windows with Docker
 
 You will need to set the following in your .air.toml file on Windows for live reload to work:
-~~~
+
+```
 bin = "tmp/main.exe"
 cmd = "go build -o ./tmp/main.exe ."
 ...
 poll = true
-~~~
+```
 
 ## Optional: Running PlayDate Using Just
 
 **Note** if you are lazy you can use just instead of all of that typing
+
 ```shell
 just
 ```
@@ -47,8 +56,7 @@ just
 ### Using Powershell on Windows with Just
 
 You will need to add the following line to the top of your justfile if using powershell to run just:
+
 ```shell
 set shell := ["powershell.exe", "-c"]
 ```
-
-
