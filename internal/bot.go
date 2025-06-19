@@ -60,14 +60,6 @@ func InitAttendanceReactions(a *Api, msg *discordgo.Message) {
 	a.dg.MessageReactionAdd(Config.DiscordChannelID, msg.ID, "👎")
 }
 
-func handleReactionAdd(dg *discordgo.Session, event *discordgo.MessageReactionAdd) {
-
-}
-
-func handleReactionRemove(dg *discordgo.Session, event *discordgo.MessageReactionRemove) {
-
-}
-
 func createDiscordBot(db *bun.DB) (dg *discordgo.Session) {
 	log.Info().Msg("Attempting to start Discord Bot.")
 	dg, err := discordgo.New("Bot " + Config.DiscordAPIKey)
@@ -84,12 +76,6 @@ func createDiscordBot(db *bun.DB) (dg *discordgo.Session) {
 			}
 			handler(session, interaction, botContext)
 		}
-	})
-	dg.AddHandler(func(s *discordgo.Session, event *discordgo.MessageReactionAdd) {
-		handleReactionAdd(s, event)
-	})
-	dg.AddHandler(func(s *discordgo.Session, event *discordgo.MessageReactionRemove) {
-		handleReactionRemove(s, event)
 	})
 	dg.AddHandler(func(s *discordgo.Session, event *discordgo.Ready) {
 		s.ChannelMessageSend(Config.DiscordChannelID, "Let's Play!")

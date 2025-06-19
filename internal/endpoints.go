@@ -68,6 +68,11 @@ func StartAPI(db *bun.DB, dg *discordgo.Session) {
 	router.GET("/register", api.goToRegisterUser)
 	router.GET("/login", api.goToLogin)
 
+	// Start discord handlers
+	dg.AddHandler(func(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
+		api.setPlayDateAttendenceFromDisc(r.MessageReaction)
+	})
+
 	go api.watchDog()
 	router.Run("0.0.0.0:8080")
 }
@@ -85,7 +90,7 @@ type Api struct {
 
 func (a *Api) watchDog() {
 	log.Info().Msg("Watching for PlayDates..")
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(time.Minute / 2)
 
 	go func() {
 		for {
@@ -322,6 +327,80 @@ func (a *Api) setPlayDateAttendence(c *gin.Context) {
 	state["PlayDatePlayers"] = playdatePlayers
 	state["PlayDate"] = playdate
 	c.HTML(http.StatusOK, "partials/players-table.html", state)
+}
+
+func (a *Api) setPlayDateAttendenceFromDisc(r *discordgo.MessageReaction) {
+	if r.UserID == "1252426978313633812" {
+		log.Info().Msg("Reaction created by bot")
+		return
+	}
+
+	log.Info().Any("Reaction", r).Msg("Setting player attendance")
+	discId := r.UserID
+	react := r.Emoji.Name
+	msg, err := a.dg.ChannelMessage(Config.DiscordChannelID, r.MessageID)
+	if err != nil {
+		log.Err(err).Msg("failed to get reaction message")
+		a.dg.ChannelMessageSend(Config.DiscordChannelID, "Couldn't update attendance, sorry.")
+		return
+	}
+	if msg.Author.ID != "1252426978313633812" {
+		log.Info().Msg("Not a bot message")
+		return
+	}
+
+	attendance := AttendanceFrom(react) // parse input attendence action to internal enum
+	msgSplit := strings.Split(msg.Content, "/")
+	if len(msgSplit) <= 1 {
+		log.Info().Msg("Not a playdate")
+		return
+	}
+	pId, err := strconv.Atoi(msgSplit[len(msgSplit)-1])
+	if err != nil {
+		log.Err(err).Msg("failed to parse given playdate id")
+		a.dg.ChannelMessageSend(Config.DiscordChannelID, "Failed to get playdate from message")
+		return
+	}
+
+	playdate := &PlayDate{ID: pId}
+	err = a.db.NewSelect().Model(playdate).WherePK().
+		Where("date <= ?", time.Now().Format("2006-01-02T15:04")).
+		Where("status = ?", PlayDateStatusPending).Scan(a.ctx)
+	if err != nil {
+		log.Err(err).Int("playdateID", pId).Msg("failed to find playdate or it already happened")
+		return
+	}
+
+	log.Info().Int("playdateID", playdate.ID).Str("discordId", discId).Any("action", attendance).Msg("attempting to set playdate attendance")
+	errors := map[string]string{}
+	player := &Player{DiscordID: discId}
+	err = a.db.NewSelect().Model(player).Where("discord_id = ?", player.DiscordID).Scan(a.ctx)
+	if err != nil {
+		log.Err(err).Str("discID", discId).Msg("failed to find player")
+		return
+	}
+	rel := &PlayDateToPlayer{PlayDateID: playdate.ID, PlayerID: player.ID, Attending: attendance}
+	_, err = a.db.NewInsert().Model(rel).On("CONFLICT (playdate_id, player_id) DO UPDATE").Set("attending = EXCLUDED.attending").Exec(a.ctx)
+	if err != nil {
+		// send error back to user within the players-table.html
+		log.Error().Err(err).Interface("relation", rel).Msg("failed to insert playdate to player relation")
+		errors["PlayDatePlayers"] = err.Error()
+	} else {
+		log.Info().Interface("relation", rel).Msg("successfully inserted playdate to player relation")
+	}
+
+	playdatePlayers := []*PlayDateToPlayer{}
+	err = a.db.NewSelect().Model(&playdatePlayers).Relation("Player").Where("playdate_id = ?", playdate.ID).Scan(a.ctx)
+	if err != nil {
+		// report error back to user, but just render the page like normal
+		log.Err(err).Any("playdate", playdate).Msg("failed to find related players to playdate")
+		errors["PlayDatePlayers"] = err.Error()
+	}
+	err = a.dg.MessageReactionRemove(Config.DiscordChannelID, msg.ID, r.Emoji.APIName(), discId)
+	if err != nil {
+		log.Info().Any("Channel", Config.DiscordChannelID).Any("Msg", msg.ID).Any("Emoji", r.Emoji.APIName()).Any("discId", discId).Msg("Reaction Remove Info")
+		log.Err(err).Msg("Failed to remove reaction")
+	}
 }
 
 func (a *Api) registerUserTemplate(c *gin.Context) {
