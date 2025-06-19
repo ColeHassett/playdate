@@ -27,7 +27,7 @@ type BotContext struct {
 func createDiscordCommands(dg *discordgo.Session) ([]*discordgo.ApplicationCommand, error) {
 	registeredCommands := make([]*discordgo.ApplicationCommand, len(commands))
 	for i, v := range commands {
-		cmd, err := dg.ApplicationCommandCreate(dg.State.User.ID, Config.DiscordGuildID, v)
+		cmd, err := dg.ApplicationCommandCreate(dg.State.User.ID, Config.DiscordConfig.GuildID, v)
 		if err != nil {
 			return nil, err
 		}
@@ -38,12 +38,12 @@ func createDiscordCommands(dg *discordgo.Session) ([]*discordgo.ApplicationComma
 
 func deleteDiscordCommands(dg *discordgo.Session) error {
 	log.Info().Msg("Removing Discord Commands..")
-	registeredCommands, err := dg.ApplicationCommands(dg.State.User.ID, Config.DiscordGuildID)
+	registeredCommands, err := dg.ApplicationCommands(dg.State.User.ID, Config.DiscordConfig.GuildID)
 	if err != nil {
 		return err
 	}
 	for _, v := range registeredCommands {
-		err := dg.ApplicationCommandDelete(dg.State.User.ID, Config.DiscordGuildID, v.ID)
+		err := dg.ApplicationCommandDelete(dg.State.User.ID, Config.DiscordConfig.GuildID, v.ID)
 		if err != nil {
 			log.Err(err).Any("Command", v).Msg("Could not delete Discord command")
 			return err
@@ -55,14 +55,14 @@ func deleteDiscordCommands(dg *discordgo.Session) error {
 
 func InitAttendanceReactions(a *Api, msg *discordgo.Message) {
 	log.Info().Msg("Adding Reactions to playdate")
-	a.dg.MessageReactionAdd(Config.DiscordChannelID, msg.ID, "👍")
-	a.dg.MessageReactionAdd(Config.DiscordChannelID, msg.ID, "🤔")
-	a.dg.MessageReactionAdd(Config.DiscordChannelID, msg.ID, "👎")
+	a.dg.MessageReactionAdd(Config.DiscordConfig.ChannelID, msg.ID, "👍")
+	a.dg.MessageReactionAdd(Config.DiscordConfig.ChannelID, msg.ID, "🤔")
+	a.dg.MessageReactionAdd(Config.DiscordConfig.ChannelID, msg.ID, "👎")
 }
 
 func createDiscordBot(db *bun.DB) (dg *discordgo.Session) {
 	log.Info().Msg("Attempting to start Discord Bot.")
-	dg, err := discordgo.New("Bot " + Config.DiscordAPIKey)
+	dg, err := discordgo.New("Bot " + Config.DiscordConfig.APIKey)
 	if err != nil {
 		log.Err(err).Msg("failed to create Discord client")
 	}
@@ -102,7 +102,7 @@ func StartDiscordBot(db *bun.DB) (dg *discordgo.Session) {
 
 func StopDiscordBot(dg *discordgo.Session) {
 	deleteDiscordCommands(dg)
-	dg.ChannelMessageSend(Config.DiscordChannelID, "Nap time....😴")
+	dg.ChannelMessageSend(Config.DiscordConfig.ChannelID, "Nap time....😴")
 	dg.Close()
 	log.Info().Msg("Discord Bot Successfully Shutdown")
 }

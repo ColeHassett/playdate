@@ -1,24 +1,26 @@
 package internal
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"time"
 )
 
 const timeFormat = "Jan 2 2006 at 03:04 PM"
 
-// formatTime formats a time.Time object into a human-readable string format.
-func formatTime(t *time.Time) string {
+// FormatTime formats a time.Time object into a human-readable string format.
+func FormatTime(t *time.Time) string {
 	if t == nil {
 		return ""
 	}
 	return t.Format(timeFormat)
 }
 
-// relativeTime formats a given time.Time value into a human-readable string indicating
+// RelativeTime formats a given time.Time value into a human-readable string indicating
 // how long ago or how long from now it occurred. It breaks down the difference
 // into the largest appropriate unit (seconds, minutes, hours, days, months, years).
-func relativeTime(t time.Time) string {
+func RelativeTime(t time.Time) string {
 	now := time.Now()
 	diff := now.Sub(t) // if t is in future, diff will be negative
 
@@ -72,4 +74,14 @@ func relativeTime(t time.Time) string {
 		}
 		return fmt.Sprintf("%d years %s", years, suffix)
 	}
+}
+
+// GenerateRandomState generates a URL-safe random string for the 'state' parameter.
+func GenerateRandomState() (string, error) {
+	b := make([]byte, 16)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(b), nil
 }
