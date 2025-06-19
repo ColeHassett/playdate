@@ -711,12 +711,31 @@ func (a *Api) sendPatchNotes() {
 
 	log.Debug().Any("Release", release).Msg("Github Release")
 
+	releaseBody := strings.ReplaceAll(release.Body, "@ColeHassett", "<@108736074557239296>")
+	releaseBody = strings.ReplaceAll(releaseBody, "@colinthatcher", "<@128629520742744065>")
+
+	log.Info().Any("Release Body", releaseBody).Msg("New release body?")
+
 	embed := &discordgo.MessageEmbed{
 		Title:       fmt.Sprintf("🤯 New PlayDate Release: %s 🤯", release.Name),
-		Description: release.Body,
+		Description: getFirstNRunes(releaseBody, 4096),
 		Color:       0xfadde6,
 		Timestamp:   release.PublishedAt.Format(time.RFC3339), // Discord expects ISO 8601 for timestamp
 	}
 
 	a.dg.ChannelMessageSendEmbed(Config.DiscordChannelID, embed)
+}
+
+// In case the string is too long for the embed somehow
+func getFirstNRunes(s string, n int) string {
+	body := strings.Split(s, "\r")
+	changelog := strings.Join(body[len(body)-1:], " ")
+	nolog := strings.Join(body[:len(body)-1], " ")
+
+	runes := []rune(nolog)
+	size := n - (len(changelog) + 4)
+	if len(runes) > size {
+		return string(runes[:size]) + fmt.Sprintf("\n...%s", changelog)
+	}
+	return s
 }
