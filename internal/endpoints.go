@@ -712,7 +712,7 @@ func (a *Api) sendPatchNotes() {
 	log.Debug().Any("Release", release).Msg("Github Release")
 
 	embed := &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("New PlayDate Release 🤯: %s", release.Name),
+		Title:       fmt.Sprintf("🤯 New PlayDate Release: %s 🤯", release.Name),
 		Description: release.Body,
 		Color:       0xfadde6,
 		Timestamp:   release.PublishedAt.Format(time.RFC3339), // Discord expects ISO 8601 for timestamp
