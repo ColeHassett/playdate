@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -772,8 +773,6 @@ func (a *Api) sendPatchNotes() {
 	releaseBody := strings.ReplaceAll(release.Body, "@ColeHassett", "<@108736074557239296>")
 	releaseBody = strings.ReplaceAll(releaseBody, "@colinthatcher", "<@128629520742744065>")
 
-	log.Info().Any("Release Body", releaseBody).Msg("New release body?")
-
 	embed := &discordgo.MessageEmbed{
 		Title:       fmt.Sprintf("🤯 New PlayDate Release: %s 🤯", release.Name),
 		Description: getFirstNRunes(releaseBody, 4096),
@@ -781,7 +780,7 @@ func (a *Api) sendPatchNotes() {
 		Timestamp:   release.PublishedAt.Format(time.RFC3339), // Discord expects ISO 8601 for timestamp
 	}
 
-	a.dg.ChannelMessageSendEmbed(Config.DiscordChannelID, embed)
+	a.dg.ChannelMessageSendEmbed(Config.DiscordConfig.ChannelID, embed)
 }
 
 // In case the string is too long for the embed somehow
