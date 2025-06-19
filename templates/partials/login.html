@@ -1,46 +1,69 @@
 {{ define "partials/login.html" }}
-{{ if .ServerError }}
-<div class="alert alert-danger" role="alert">{{.ServerError}}</div>
-{{ end }}
-<div id="login">
+  {{ if .ServerError }}
+    <div class="alert alert-danger" role="alert">{{ .ServerError }}</div>
+  {{ end }}
+  <div id="login">
     <h3 class="">Sign-in</h3>
-    <form class="{{- if .Errors -}} was-validated {{- else -}} needs-validated {{- end -}}"
-          hx-post="/login"
-          hx-swap="outerHTML"
-          hx-target="#login"
-          novalidate>
-        <div class="mb-3">
-            <label class="form-label" for="name">Name</label>
-            <input class="form-control "
-                   type="text"
-                   name="name"
-                   value="{{ .Name }}"
-                   required />
-            {{- if .Errors }}
-            {{- if index .Errors "name" }}
+    <form
+      class="{{- if .Errors -}}
+        was-validated
+      {{- else -}}
+        needs-validated
+      {{- end -}}"
+      hx-post="/login"
+      hx-swap="outerHTML"
+      hx-target="#login"
+      novalidate
+    >
+      <div class="mb-3">
+        <label class="form-label" for="name">Name</label>
+        <input
+          class="form-control"
+          type="text"
+          name="name"
+          value="{{ .Name }}"
+          required
+        />
+        {{- if .Errors }}
+          {{- if index .Errors "name" }}
             <div class="invalid-feedback">{{ index .Errors "name" }}</div>
-            {{- else }}
+          {{- else }}
             <div class="valid-feedback"></div>
-            {{- end }}
-            {{- end }}
-        </div>
-        <div class="mb-3">
-            <label class="form-label" for="password">Password</label>
-            <input class="form-control"
-                   type="password"
-                   name="password"
-                   value="{{ .Password }}"
-                   required />
-            {{- if .Errors }}
-            {{- if index .Errors "password" }}
+          {{- end }}
+        {{- end }}
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="password">Password</label>
+        <input
+          class="form-control"
+          type="password"
+          name="password"
+          value="{{ .Password }}"
+          required
+        />
+        {{- if .Errors }}
+          {{- if index .Errors "password" }}
             <div class="invalid-feedback">{{ index .Errors "password" }}</div>
-            {{- else }}
+          {{- else }}
             <div class="valid-feedback"></div>
-            {{- end }}
-            {{- end }}
-        </div>
-        <button class="btn btn-primary" type="submit">Login</button>
-        <button class="btn btn-primary" hx-get="/register" hx-swap="outerHTML" hx-target="#login" novalidate>Register</button>
+          {{- end }}
+        {{- end }}
+      </div>
+      <button class="btn btn-primary" type="submit">Login</button>
+      <button
+        class="btn btn-primary"
+        hx-get="/register"
+        hx-swap="outerHTML"
+        hx-target="#login"
+        novalidate
+      >
+        Register
+      </button>
     </form>
-</div>
+    <br />
+    <a id="login" href="/discord/login" class="btn btn-primary">
+      <i class="fa-brands fa-discord"></i>
+      <span>Login with Discord</span>
+    </a>
+  </div>
 {{ end }}

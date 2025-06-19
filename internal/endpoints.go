@@ -2,7 +2,6 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -45,28 +44,35 @@ func StartAPI(db *bun.DB, dg *discordgo.Session) {
 
 	// custom template functions
 	router.SetFuncMap(template.FuncMap{
-		"formatTime":   formatTime,
-		"relativeTime": relativeTime,
+		"formatTime":   FormatTime,
+		"relativeTime": RelativeTime,
 	})
 
 	// Template Endpoints
 	router.LoadHTMLGlob(fmt.Sprintf("%s/**/*.html", Config.TemplateDirectory))
 	router.StaticFile("custom-colors.css", fmt.Sprintf("%s/custom-colors.css", Config.TemplateDirectory))
-	// Templated endpoints
+
+	// NOTE: Login/Registration Routes
 	router.GET("/", api.index)
 	router.POST("/login", api.userLogin)
+	router.DELETE("/logout", api.userLogout)
 	router.POST("/register", api.registerUserTemplate)
 	router.POST("/verify", api.verifyPlayer)
+	// Navigate around?
+	router.GET("/register", api.goToRegisterUser)
+	router.GET("/login", api.goToLogin)
+
+	// NOTE: Discord OAuth Routes
+	router.GET("/discord/login", api.handleOAuthLogin)
+	router.GET("/discord/callback", api.handleOAuthCallback)
+
+	// NOTE: Application Routes
 	router.GET("/playdate", api.showPlayDateForm)
 	router.POST("/playdate", api.createPlayDateTemplate)
 	router.GET("/playdate/:id", api.getPlayDateTemplate)
 	router.POST("/playdate/:id/yes", api.setPlayDateAttendence)
 	router.POST("/playdate/:id/maybe", api.setPlayDateAttendence)
 	router.POST("/playdate/:id/no", api.setPlayDateAttendence)
-
-	// Navigate around?
-	router.GET("/register", api.goToRegisterUser)
-	router.GET("/login", api.goToLogin)
 
 	go api.watchDog()
 	router.Run("0.0.0.0:8080")
@@ -112,8 +118,7 @@ func (a *Api) index(c *gin.Context) {
 	player, err := a.findPlayerFromCookie(c)
 	if err != nil {
 		// delete the cookie that was on the request to avoid an infinite loop
-		c.SetCookie("playdate", "", -1, "/", "", false, true)
-		c.Redirect(http.StatusFound, "/")
+		a.userLogout(c)
 		return
 	}
 
@@ -208,8 +213,8 @@ func (a *Api) createPlayDateTemplate(c *gin.Context) {
 	}
 
 	// send notification to configure channel to share the new playdate to the masses!
-	msg := fmt.Sprintf("Playdate %s at %s by %s! Check it out here: https://playdate.colinthatcher.dev/playdate/%d", playdate.Game, formatTime(&playdate.Date), player.Name, playdate.ID)
-	_, err = a.dg.ChannelMessageSend(Config.DiscordChannelID, msg)
+	msg := fmt.Sprintf("Playdate %s at %s by %s! Check it out here: https://playdate.colinthatcher.dev/playdate/%d", playdate.Game, FormatTime(&playdate.Date), player.Name, playdate.ID)
+	_, err = a.dg.ChannelMessageSend(Config.DiscordConfig.ChannelID, msg)
 	if err != nil {
 		log.Err(err).Any("playdate", playdate).Msg("failed to send message for new playdate to discord")
 	}
@@ -370,8 +375,15 @@ func (a *Api) registerUserTemplate(c *gin.Context) {
 		c.HTML(http.StatusOK, "partials/register.html", formData)
 		return
 	}
+	sessionId, err := GenerateRandomState()
+	if err != nil {
+		log.Err(err).Msg("failed to generate session id")
+		formData["ServerError"] = err.Error()
+		c.HTML(http.StatusOK, "partials/register.html", formData)
+		return
+	}
 
-	player = Player{Name: name, DiscordID: discID, Password: string(bytes)}
+	player = Player{Name: name, DiscordID: discID, Password: string(bytes), SessionId: sessionId}
 	err = a.db.NewSelect().Model(&player).Where("discord_id = ?", player.DiscordID).Scan(a.ctx)
 	if err != nil {
 		player.VerificationCode = uuid.NewString()
@@ -458,10 +470,7 @@ func (a *Api) verifyPlayer(c *gin.Context) {
 		return
 	}
 
-	val, _ := json.Marshal(player)
-	c.SetCookie("playdate", string(val), 0, "/", "", false, true)
-	c.Status(http.StatusCreated)
-	c.Header("HX-Location", "/")
+	a.createPlayDateCookie(c, player.SessionId)
 }
 
 func (a *Api) fetchPoppedDates() {
@@ -493,7 +502,7 @@ func (a *Api) fetchPoppedDates() {
 			atAttendingPlayers = atAttendingPlayers + fmt.Sprintf("<@%s>", attendance.Player.DiscordID)
 		}
 		msg := fmt.Sprintf("Playdate %s created by <@%s> is happening now! Make sure to join :video_game:!\n%s", playdate.Game, playdate.Owner.DiscordID, atAttendingPlayers)
-		_, err = a.dg.ChannelMessageSend(Config.DiscordChannelID, msg)
+		_, err = a.dg.ChannelMessageSend(Config.DiscordConfig.ChannelID, msg)
 		if err != nil {
 			log.Err(err).Any("playdate", playdate).Msg("failed to send message for playdate")
 		}
@@ -508,7 +517,6 @@ func (a *Api) fetchPoppedDates() {
 }
 
 func (a *Api) findPlayerFromCookie(c *gin.Context) (*Player, error) {
-	player := &Player{}
 	cookie, err := c.Cookie("playdate")
 	if err != nil {
 		msg := "failed to parse user's cookie"
@@ -516,14 +524,8 @@ func (a *Api) findPlayerFromCookie(c *gin.Context) (*Player, error) {
 		return nil, errors.New(msg)
 	}
 
-	err = json.Unmarshal([]byte(cookie), player)
-	if err != nil {
-		// if the given player id doesn't exist just return the called to the home page
-		msg := "failed to unmarshal cookie into player struct"
-		log.Err(err).Str("cookie", cookie).Msg(msg)
-		return nil, errors.New(msg)
-	}
-	err = a.db.NewSelect().Model(player).WherePK().Scan(c.Request.Context())
+	player := &Player{SessionId: cookie}
+	err = a.db.NewSelect().Model(player).Where("session_id = ?", player.SessionId).Scan(c.Request.Context())
 	if err != nil {
 		// if the given player id doesn't exist just return the called to the home page
 		msg := "failed to find the player from their cookie"
@@ -564,8 +566,8 @@ func (a *Api) userLogin(c *gin.Context) {
 		return
 	}
 
-	player := Player{Name: name}
-	err := a.db.NewSelect().Model(&player).Where("name = ?", player.Name).Scan(a.ctx)
+	player := &Player{Name: name}
+	err := a.db.NewSelect().Model(player).Where("name = ?", player.Name).Scan(a.ctx)
 	if err != nil {
 		log.Err(err).Any("player", player).Msg("failed to find player")
 		formData["ServerError"] = "User doesn't exist"
@@ -581,9 +583,65 @@ func (a *Api) userLogin(c *gin.Context) {
 		return
 	}
 
-	player.Password = ""
-	val, _ := json.Marshal(player)
-	c.SetCookie("playdate", string(val), 2000000, "/", "", false, true)
-	c.Status(http.StatusCreated)
-	c.Header("HX-Location", "/")
+	newSessionId, err := GenerateRandomState()
+	if err != nil {
+		log.Err(err).Msg("failed to generate session id")
+		formData["ServerError"] = err.Error()
+		c.HTML(http.StatusOK, "partials/register.html", formData)
+		return
+	}
+	player.SessionId = newSessionId
+	_, err = a.db.NewUpdate().Model(player).WherePK().Exec(a.ctx)
+	if err != nil {
+		log.Err(err).Msg("failed to update users session id")
+		formData["ServerError"] = err.Error()
+		c.HTML(http.StatusOK, "partials/register.html", formData)
+		return
+	}
+
+	a.createPlayDateCookie(c, newSessionId)
+}
+
+// TODO: This isn't working
+func (a *Api) userLogout(c *gin.Context) {
+	// TODO: delete existing session id
+	c.SetCookie("playdate", "", -1, "/", "", false, true)
+	if c.Request.Header.Get("HX-Request") != "" {
+		c.Header("HX-Location", "/")
+	} else {
+		c.Redirect(http.StatusMovedPermanently, "/")
+	}
+}
+
+// create cookie and redirect to index
+func (a *Api) createPlayDateCookie(c *gin.Context, sessionId string) {
+	c.SetCookie("playdate", string(sessionId), 2000000, "/", "", false, true)
+	if c.Request.Header.Get("HX-Request") != "" {
+		c.Header("HX-Location", "/")
+	} else {
+		c.Redirect(http.StatusMovedPermanently, "/")
+	}
+}
+
+func (a *Api) handleOAuthLogin(c *gin.Context) {
+	authURL, err := DiscordOAuthLogin(a)
+	if err != nil {
+		log.Err(err).Msg("failed to oauth login")
+		return
+	}
+
+	// Redirect the user's browser to Discord's authorization page
+	log.Info().Str("discordAuthUrl", authURL).Msg("Redirecting user to discord oauth")
+	c.Redirect(http.StatusFound, authURL)
+	log.Info().Str("authURL", authURL).Msg("Redirecting user to Discord for authorization")
+}
+
+func (a *Api) handleOAuthCallback(c *gin.Context) {
+	player, err := DiscordOAuthCallback(c, a)
+	if err != nil {
+		log.Err(err).Msg("failed oauth callback")
+		return
+	}
+
+	a.createPlayDateCookie(c, player.SessionId)
 }

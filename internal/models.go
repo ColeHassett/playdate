@@ -61,9 +61,11 @@ type Player struct {
 	ID               int       `bun:",pk,autoincrement" json:"id"`
 	CreatedDate      time.Time `bun:"created_date,nullzero,default:CURRENT_TIMESTAMP" json:"created_date"`
 	Name             string    `bun:"name,notnull,unique" json:"name"`
-	Password         string    `bun:"password,notnull" json:"password"`
+	Password         string    `bun:"password,notnull"`
 	DiscordID        string    `bun:"discord_id,notnull,unique" json:"discord_id"`
 	VerificationCode string    `bun:"verification_code,notnull" json:"verification_code"`
+	SessionId        string    `bun:"session_id,notnull"`
+	OAuthToken       string    `bun:"oauth_token"`
 
 	// just relationship fields for bun to utilize
 	Attendances []*PlayDateToPlayer `bun:"rel:has-many,join:id=player_id"`

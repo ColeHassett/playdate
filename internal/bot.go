@@ -81,7 +81,7 @@ type BotContext struct {
 func createDiscordCommands(dg *discordgo.Session) ([]*discordgo.ApplicationCommand, error) {
 	registeredCommands := make([]*discordgo.ApplicationCommand, len(commands))
 	for i, v := range commands {
-		cmd, err := dg.ApplicationCommandCreate(dg.State.User.ID, Config.DiscordGuildID, v)
+		cmd, err := dg.ApplicationCommandCreate(dg.State.User.ID, Config.DiscordConfig.GuildID, v)
 		if err != nil {
 			return nil, err
 		}
@@ -91,12 +91,12 @@ func createDiscordCommands(dg *discordgo.Session) ([]*discordgo.ApplicationComma
 }
 
 func deleteDiscordCommands(dg *discordgo.Session) error {
-	registeredCommands, err := dg.ApplicationCommands(dg.State.User.ID, Config.DiscordGuildID)
+	registeredCommands, err := dg.ApplicationCommands(dg.State.User.ID, Config.DiscordConfig.GuildID)
 	if err != nil {
 		return err
 	}
 	for _, v := range registeredCommands {
-		err := dg.ApplicationCommandDelete(dg.State.User.ID, Config.DiscordGuildID, v.ID)
+		err := dg.ApplicationCommandDelete(dg.State.User.ID, Config.DiscordConfig.GuildID, v.ID)
 		if err != nil {
 			log.Err(err).Any("Command", v).Msg("Could not delete discord command")
 			return err
@@ -107,7 +107,7 @@ func deleteDiscordCommands(dg *discordgo.Session) error {
 
 func createDiscordBot(errChan chan error, db *bun.DB) (dg *discordgo.Session) {
 	log.Info().Msg("Attempting to start Discord Bot.")
-	dg, err := discordgo.New("Bot " + Config.DiscordAPIKey)
+	dg, err := discordgo.New("Bot " + Config.DiscordConfig.APIKey)
 	if err != nil {
 		log.Err(err).Msg("failed to create discord client")
 		errChan <- err
@@ -125,7 +125,7 @@ func createDiscordBot(errChan chan error, db *bun.DB) (dg *discordgo.Session) {
 	})
 
 	dg.AddHandler(func(s *discordgo.Session, event *discordgo.Ready) {
-		s.ChannelMessageSend(Config.DiscordChannelID, "Let's Play!")
+		s.ChannelMessageSend(Config.DiscordConfig.ChannelID, "Let's Play!")
 	})
 
 	// Open websocket connection to discord
