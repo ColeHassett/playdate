@@ -6,4 +6,6 @@ ALTER TABLE player ADD COLUMN oauth_token VARCHAR(128);
 
 -- +goose Down
 -- +goose StatementBegin
+ALTER TABLE player DROP COLUMN session_id;
+ALTER TABLE player DROP COLUMN oauth_token;
 -- +goose StatementEnd
