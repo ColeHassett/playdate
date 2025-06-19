@@ -12,6 +12,7 @@ Schedule dates to play games with your friends. 🙂
 - _optional_: [just](https://github.com/casey/just?tab=readme-ov-file#installation)
 
 When using mise you can to install the pinned versions of the software in `mise.toml`
+
 ```shell
 mise install
 ```
