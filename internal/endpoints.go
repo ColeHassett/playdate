@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -78,6 +79,7 @@ func StartAPI(db *bun.DB, dg *discordgo.Session) {
 	dg.AddHandler(func(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 		api.setPlayDateAttendenceFromDisc(r.MessageReaction)
 	})
+	api.sendPatchNotes()
 
 	go api.watchDog()
 	router.Run("0.0.0.0:8080")
@@ -92,6 +94,14 @@ type Api struct {
 	db  *bun.DB
 	dg  *discordgo.Session
 	ctx context.Context
+}
+
+type GitHubRelease struct {
+	TagName     string    `json:"tag_name"`
+	Name        string    `json:"name"`
+	Body        string    `json:"body"`
+	PreRelease  bool      `json:"prerelease"`
+	PublishedAt time.Time `json:"published_at"`
 }
 
 func (a *Api) watchDog() {
@@ -722,4 +732,68 @@ func (a *Api) handleOAuthCallback(c *gin.Context) {
 	}
 
 	a.createPlayDateCookie(c, player.SessionId)
+}
+
+func getGithubReleaseNotes() (g GitHubRelease) {
+	url := "https://api.github.com/repos/colehassett/playdate/releases/tags/release"
+
+	// Create a new HTTP client with a timeout
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	// Make the GET request to the GitHub API
+	resp, err := client.Get(url)
+	if err != nil {
+		log.Err(err).Msg("Unable to retrieve github release notes")
+		return
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Err(err).Msg("Unable to read github response")
+		return
+	}
+
+	var release GitHubRelease
+	err = json.Unmarshal(body, &release)
+	if err != nil {
+		log.Err(err).Msg("Unable to unmarshal response body into githubrelease object")
+		return
+	}
+
+	return release
+}
+
+func (a *Api) sendPatchNotes() {
+	// get release notes
+	release := getGithubReleaseNotes()
+
+	log.Debug().Any("Release", release).Msg("Github Release")
+
+	releaseBody := strings.ReplaceAll(release.Body, "@ColeHassett", "<@108736074557239296>")
+	releaseBody = strings.ReplaceAll(releaseBody, "@colinthatcher", "<@128629520742744065>")
+
+	log.Info().Any("Release Body", releaseBody).Msg("New release body?")
+
+	embed := &discordgo.MessageEmbed{
+		Title:       fmt.Sprintf("🤯 New PlayDate Release: %s 🤯", release.Name),
+		Description: getFirstNRunes(releaseBody, 4096),
+		Color:       0xfadde6,
+		Timestamp:   release.PublishedAt.Format(time.RFC3339), // Discord expects ISO 8601 for timestamp
+	}
+
+	a.dg.ChannelMessageSendEmbed(Config.DiscordChannelID, embed)
+}
+
+// In case the string is too long for the embed somehow
+func getFirstNRunes(s string, n int) string {
+	body := strings.Split(s, "\r")
+	changelog := strings.Join(body[len(body)-1:], " ")
+	nolog := strings.Join(body[:len(body)-1], " ")
+
+	runes := []rune(nolog)
+	size := n - (len(changelog) + 4)
+	if len(runes) > size {
+		return string(runes[:size]) + fmt.Sprintf("\n...%s", changelog)
+	}
+	return s
 }
