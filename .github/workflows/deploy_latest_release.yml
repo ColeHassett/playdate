@@ -31,4 +31,3 @@ jobs:
           url: ${{env.COOLIFY_URL}}/api/v1/deploy?uuid=${{env.COOLIFY_APP_ID}}&force=false
           method: GET
           bearerToken: ${{env.COOLIFY_API_KEY}}
-
