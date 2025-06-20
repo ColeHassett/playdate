@@ -392,8 +392,11 @@ func (a *Api) setPlayDateAttendenceFromDisc(r *discordgo.MessageReaction) {
 	err = a.db.NewSelect().Model(player).Where("discord_id = ?", player.DiscordID).Scan(a.ctx)
 	if err != nil {
 		log.Err(err).Str("discID", discId).Msg("failed to find player")
-		a.dg.ChannelMessageSend(Config.DiscordConfig.ChannelID, "Please go here to make an account: https://playdate.colinthatcher.dev/")
-		a.dg.MessageReactionRemove(Config.DiscordConfig.ChannelID, msg.ID, r.Emoji.APIName(), discId)
+		a.dg.ChannelMessageSend(Config.DiscordConfig.ChannelID, "Please go here to make an account: https://playdate.colinthatcher.dev/discord/login")
+		err = a.dg.MessageReactionRemove(Config.DiscordConfig.ChannelID, msg.ID, r.Emoji.APIName(), discId)
+		if err != nil {
+			log.Err(err).Msg("Failed to remove reaction on anon user")
+		}
 		return
 	}
 	rel := &PlayDateToPlayer{PlayDateID: playdate.ID, PlayerID: player.ID, Attending: attendance}
@@ -411,9 +414,24 @@ func (a *Api) setPlayDateAttendenceFromDisc(r *discordgo.MessageReaction) {
 		// report error back to user, but just render the page like normal
 		log.Err(err).Any("playdate", playdate).Msg("failed to find related players to playdate")
 	}
-	err = a.dg.MessageReactionRemove(Config.DiscordConfig.ChannelID, msg.ID, r.Emoji.APIName(), discId)
-	if err != nil {
-		log.Err(err).Msg("Failed to remove reaction")
+
+	if r.Emoji.APIName() != "👍" {
+		err = a.dg.MessageReactionRemove(Config.DiscordConfig.ChannelID, msg.ID, "👍", discId)
+		if err != nil {
+			log.Err(err).Str("Reaction", "👍").Msg("Failed to remove reaction")
+		}
+	}
+	if r.Emoji.APIName() != "🤔" {
+		err = a.dg.MessageReactionRemove(Config.DiscordConfig.ChannelID, msg.ID, "🤔", discId)
+		if err != nil {
+			log.Err(err).Str("Reaction", "🤔").Msg("Failed to remove reaction")
+		}
+	}
+	if r.Emoji.APIName() != "👎" {
+		err = a.dg.MessageReactionRemove(Config.DiscordConfig.ChannelID, msg.ID, "👎", discId)
+		if err != nil {
+			log.Err(err).Str("Reaction", "👎").Msg("Failed to remove reaction")
+		}
 	}
 }
 
