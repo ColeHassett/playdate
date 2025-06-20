@@ -45,7 +45,7 @@ jobs:
 
           # Construct the Coolify redeploy webhook URL
           # Coolify typically uses a path like /api/v1/deploy/webhooks/<application-uuid>
-          COOLIFY_WEBHOOK_URL="${COOLIFY_URL}/api/v1/deploy/?uuid=${COOLIFY_APP_ID}&force=false"
+          COOLIFY_WEBHOOK_URL="${COOLIFY_URL}/api/v1/deploy?uuid=${COOLIFY_APP_ID}&force=false"
 
           echo "Attempting to trigger Coolify redeploy for App ID: $COOLIFY_APP_ID"
           echo "Targeting URL: $COOLIFY_WEBHOOK_URL"
