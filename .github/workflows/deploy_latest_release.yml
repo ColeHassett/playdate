@@ -52,7 +52,7 @@ jobs:
           echo "Release Tag: $RELEASE_TAG"
 
           # Initialize curl command with common options
-          CURL_COMMAND="curl -s -f -X POST"
+          CURL_COMMAND="curl -vvv -s -f -X POST"
 
           # Add Authorization header if API key is provided
           if [ -n "$COOLIFY_API_KEY" ]; then
