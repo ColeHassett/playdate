@@ -780,7 +780,10 @@ func (a *Api) sendPatchNotes() {
 		Timestamp:   release.PublishedAt.Format(time.RFC3339), // Discord expects ISO 8601 for timestamp
 	}
 
-	a.dg.ChannelMessageSendEmbed(Config.DiscordConfig.ChannelID, embed)
+	_, err := a.dg.ChannelMessageSendEmbed(Config.DiscordConfig.ChannelID, embed)
+	if err != nil {
+		log.Err(err).Msg("Failed to send patch notes embed")
+	}
 }
 
 // In case the string is too long for the embed somehow
