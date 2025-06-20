@@ -392,7 +392,7 @@ func (a *Api) setPlayDateAttendenceFromDisc(r *discordgo.MessageReaction) {
 	err = a.db.NewSelect().Model(player).Where("discord_id = ?", player.DiscordID).Scan(a.ctx)
 	if err != nil {
 		log.Err(err).Str("discID", discId).Msg("failed to find player")
-		a.dg.ChannelMessageSend(Config.DiscordConfig.ChannelID, "Please go here to make an account: https://playdate.colinthatcher.dev/")
+		a.dg.ChannelMessageSend(Config.DiscordConfig.ChannelID, "Please go here to make an account: https://playdate.colinthatcher.dev/discord/login")
 		a.dg.MessageReactionRemove(Config.DiscordConfig.ChannelID, msg.ID, r.Emoji.APIName(), discId)
 		return
 	}
