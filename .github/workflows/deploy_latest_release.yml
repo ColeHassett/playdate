@@ -1,0 +1,76 @@
+# .github/workflows/release-webhook.yml
+
+name: Release Webhook Notification (Coolify)
+
+# This workflow runs when a new release is published.
+on:
+  release:
+    types: [published] # Trigger only when a release is published
+
+jobs:
+  notify_coolify:
+    runs-on: ubuntu-latest # Specify the runner environment
+
+    steps:
+      - name: Checkout repository code
+        uses: actions/checkout@v4 # Action to check out your repository code
+
+      - name: Trigger Coolify Redeploy
+        env:
+          # Define environment variables from GitHub's built-in context
+          # These secrets must be set in your repository (Settings -> Secrets and variables -> Actions -> New repository secret)
+          COOLIFY_URL: ${{ secrets.COOLIFY_URL }} # e.g., https://your-coolify-instance.com
+          COOLIFY_APP_ID: ${{ secrets.COOLIFY_APP_ID }} # The UUID of your application in Coolify
+          # Optional: If your Coolify instance requires an API key for this webhook
+          COOLIFY_API_KEY: ${{ secrets.COOLIFY_API_KEY }}
+
+          # You can still use these for logging or debugging within the action
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_NAME: ${{ github.event.release.name }}
+          RELEASE_HTML_URL: ${{ github.event.release.html_url }}
+          REPOSITORY_FULL_NAME: ${{ github.repository }}
+          SENDER_LOGIN: ${{ github.event.sender.login }}
+          RELEASE_CREATED_AT: ${{ github.event.release.created_at }}
+
+        run: |
+          # Validate that required secrets are set
+          if [ -z "$COOLIFY_URL" ]; then
+            echo "Error: COOLIFY_URL secret is not set. Please add it to your repository secrets."
+            exit 1
+          fi
+          if [ -z "$COOLIFY_APP_ID" ]; then
+            echo "Error: COOLIFY_APP_ID secret is not set. Please add it to your repository secrets."
+            exit 1
+          fi
+
+          # Construct the Coolify redeploy webhook URL
+          # Coolify typically uses a path like /api/v1/deploy/webhooks/<application-uuid>
+          COOLIFY_WEBHOOK_URL="${COOLIFY_URL}/api/v1/deploy/?uuid=${COOLIFY_APP_ID}"
+
+          echo "Attempting to trigger Coolify redeploy for App ID: $COOLIFY_APP_ID"
+          echo "Targeting URL: $COOLIFY_WEBHOOK_URL"
+          echo "Release Tag: $RELEASE_TAG"
+
+          # Initialize curl command with common options
+          CURL_COMMAND="curl -s -f -X POST"
+
+          # Add Authorization header if API key is provided
+          if [ -n "$COOLIFY_API_KEY" ]; then
+            CURL_COMMAND+=" -H \"Authorization: Bearer $COOLIFY_API_KEY\""
+            echo "Using API Key for authentication."
+          else
+            echo "No API Key provided. Ensure your Coolify webhook does not require authentication or uses another method."
+          fi
+
+          # Execute the curl command
+          # Note: Coolify's redeploy webhook typically doesn't require a specific JSON body from GitHub Actions,
+          # just the POST request to the correct URL.
+          ${CURL_COMMAND} "$COOLIFY_WEBHOOK_URL"
+
+          # Check curl's exit code to determine if the request was successful
+          if [ $? -eq 0 ]; then
+            echo "Successfully sent redeploy signal to Coolify!"
+          else
+            echo "Failed to send redeploy signal to Coolify. Check URL, App ID, API Key, and Coolify logs."
+            exit 1
+          fi
