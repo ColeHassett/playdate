@@ -68,6 +68,9 @@ func StartAPI(db *bun.DB, dg *discordgo.Session) {
 	router.GET("/discord/login", api.handleOAuthLogin)
 	router.GET("/discord/callback", api.handleOAuthCallback)
 
+	// NOTE: Health Check
+	router.GET("/health", api.healthCheck)
+
 	// NOTE: Application Routes
 	router.GET("/playdate", api.showPlayDateForm)
 	router.POST("/playdate", api.createPlayDateTemplate)
@@ -751,6 +754,37 @@ func (a *Api) handleOAuthCallback(c *gin.Context) {
 	}
 
 	a.createPlayDateCookie(c, player.SessionId)
+}
+
+func (a *Api) healthCheck(c *gin.Context) {
+	// Check PostgreSQL connection
+	err := a.db.Ping()
+	if err != nil {
+		log.Error().Err(err).Msg("PostgreSQL health check failed")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "unhealthy",
+			"message": "PostgreSQL connection failed",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Check Discord connection
+	_, err = a.dg.User("@me")
+	if err != nil {
+		log.Error().Err(err).Msg("Discord health check failed")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "unhealthy",
+			"message": "Discord connection failed",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "healthy",
+		"message": "All services are healthy",
+	})
 }
 
 func getGithubReleaseNotes() (g GitHubRelease) {
