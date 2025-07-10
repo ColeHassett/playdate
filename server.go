@@ -7,8 +7,10 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
 	"uc181discord/games/bot/internal"
 
+	"github.com/bwmarrin/discordgo"
 	"github.com/pressly/goose/v3"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -24,21 +26,48 @@ var embedMigrations embed.FS
 func main() {
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
+
+	// capture process kill signals into channel
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM)
 
-	// note that this is path referenced from within the docker container
+	printBanner()
+	db := setupPostgresClient()
+	dg := setupDiscordClient()
+	internal.SetupDiscordHandlers(db, dg)
+	internal.SendPatchNotes(dg)
+	go internal.StartAPI(db, dg) // start webserver on subprocess
+
+	// listen for kill signals from OS
+	<-sc
+	shutdownServer(db, dg)
+}
+
+func shutdownServer(db *bun.DB, dg *discordgo.Session) {
+	err := db.Close()
+	if err != nil {
+		log.Err(err).Msg("failed to close postgres client")
+	}
+	err = dg.Close()
+	if err != nil {
+		log.Err(err).Msg("failed to close discord client")
+	}
+}
+
+func printBanner() {
 	banner, err := os.ReadFile("banner.txt")
 	if err != nil {
 		log.Err(err).Msg("Failed to read banner text file")
 	}
 	fmt.Print(string(banner))
+}
 
+func setupPostgresClient() *bun.DB {
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", internal.Config.PostgresUser, internal.Config.PostgresPassword, internal.Config.PostgresHost, internal.Config.PostgresPort, internal.Config.PostgresDatabase)
 	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
 	db := bun.NewDB(sqldb, pgdialect.New())
-	defer db.Close()
 	db.AddQueryHook(bundebug.NewQueryHook(bundebug.WithVerbose(true)))
+
 	// init m2m relationships the bun way
 	internal.InitializeManyToManyRelationships(db)
 
@@ -57,11 +86,21 @@ func main() {
 		log.Panic().Err(err).Msg("failed to run goose migrations")
 	}
 
-	dg := internal.StartDiscordBot(db) // start discord bot on main process
-	defer internal.StopDiscordBot(dg)
-	go internal.StartAPI(db, dg) // start webserver on subprocess
+	log.Debug().Msg("successfully started postgres client")
+	return db
+}
 
-	// die?
-	<-sc
+func setupDiscordClient() *discordgo.Session {
+	dg, err := discordgo.New("Bot " + internal.Config.DiscordConfig.APIKey)
+	if err != nil {
+		log.Err(err).Msg("failed to create Discord client")
+	}
 
+	err = dg.Open()
+	if err != nil {
+		log.Err(err).Msg("failed to open websocket to Discord")
+	}
+
+	log.Debug().Msg("successfully started discord clinet")
+	return dg
 }
