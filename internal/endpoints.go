@@ -3,7 +3,6 @@ package internal
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -60,18 +59,16 @@ func StartAPI(db *bun.DB, dg *discordgo.Session) {
 	router.DELETE("/logout", api.userLogout)
 	router.POST("/register", api.registerUserTemplate)
 	router.POST("/verify", api.verifyPlayer)
-	// Navigate around?
 	router.GET("/register", api.goToRegisterUser)
 	router.GET("/login", api.goToLogin)
 
 	// NOTE: Discord OAuth Routes
-	discord := router.Group("/discord")
-	discord.GET("/login", api.handleOAuthLogin)
-	discord.GET("/callback", api.handleOAuthCallback)
+	router.GET("/discord/login", api.handleOAuthLogin)
+	router.GET("/discord/callback", api.handleOAuthCallback)
 
-	// NOTE: Application Routes
+	// NOTE: Playdate Application Routes
 	playdate := router.Group("/playdate")
-	playdate.Use(api.cookies())
+	playdate.Use(CookiesMiddleware(&api))
 	playdate.GET("/", api.showPlayDateForm)
 	playdate.POST("/", api.createPlayDateTemplate)
 	playdate.GET("/:id", api.getPlayDateTemplate)
@@ -79,7 +76,6 @@ func StartAPI(db *bun.DB, dg *discordgo.Session) {
 	playdate.POST("/:id/maybe", api.setPlayDateAttendence)
 	playdate.POST("/:id/no", api.setPlayDateAttendence)
 
-	// move this else where
 	go api.watchDog()
 
 	err := router.Run("0.0.0.0:8080")
@@ -107,71 +103,6 @@ type GitHubRelease struct {
 	PublishedAt time.Time `json:"published_at"`
 }
 
-// TODO: Clean these methods up, avoid duplicate work
-// function to handle cookie checking for the entire application
-func (a *Api) cookies() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		log.Debug().Msg("starting middleware checking the users cookies...")
-		_, err := a.handlePlayerCookie(c)
-		switch err {
-		case ErrMissingCookie:
-			log.Warn().Msg("request missing cookie")
-			c.Redirect(http.StatusFound, "/")
-			return
-		case ErrPlayerFromCookieNotFound:
-			log.Error().Err(err).Msg(err.Error())
-			a.userLogout(c)
-			return
-		}
-		log.Debug().Msg("finished middleware checking the users cookies, player added to gin context!")
-		// c.Set("player", player)
-		// send request along to the rest of the application
-		c.Next()
-	}
-}
-
-var ErrMissingCookie = errors.New("missing cookie")
-var ErrPlayerFromCookieNotFound = errors.New("player from cookie not found")
-
-// method to handles finding the player from gin.Context, if not found handles routing the request back to the register page.
-func (a *Api) handlePlayerCookie(c *gin.Context) (*Player, error) {
-	cookie, _ := c.Cookie("playdate")
-	log.Debug().Str("Cookie", cookie).Str("HX-Request", c.Request.Header.Get("HX-Request")).Msg("rendering index")
-	if cookie == "" {
-		return nil, ErrMissingCookie
-	}
-	// render actual home page since user has a cookie
-	player, err := a.getPlayerFromCookieString(cookie, c.Request.Context())
-	if err != nil {
-		return nil, ErrPlayerFromCookieNotFound
-	}
-	return player, nil
-}
-
-// attempt to find the associated played from the given cookie
-func (a *Api) getPlayerFromCookieString(cookie string, ctx context.Context) (*Player, error) {
-	player := &Player{SessionId: cookie}
-	err := a.db.NewSelect().Model(player).Where("session_id = ?", player.SessionId).Scan(ctx)
-	if err != nil {
-		// if the given player id doesn't exist just return the called to the home page
-		msg := "failed to find the player from their cookie"
-		log.Err(err).Str("cookie", cookie).Any("player", player).Msg(msg)
-		return nil, errors.New(msg)
-	}
-	return player, nil
-}
-
-var ErrPlayerNotFoundInContext = errors.New("failed to find player in gin context")
-
-func getPlayerFromContext(c *gin.Context) (*Player, error) {
-	playerFromContext, ok := c.Get("player")
-	if !ok {
-		return nil, ErrPlayerNotFoundInContext
-	}
-	player := playerFromContext.(*Player)
-	return player, nil
-}
-
 func (a *Api) watchDog() {
 	log.Info().Msg("Watching for PlayDates..")
 	ticker := time.NewTicker(time.Minute / 2)
@@ -186,7 +117,7 @@ func (a *Api) watchDog() {
 }
 
 func (a *Api) index(c *gin.Context) {
-	player, err := a.handlePlayerCookie(c)
+	player, err := FindPlayerFromPlayDateCookie(a.db, c)
 	switch err {
 	case ErrMissingCookie:
 		log.Warn().Msg("request missing cookie")
@@ -245,7 +176,7 @@ func (a *Api) showPlayDateForm(c *gin.Context) {
 }
 
 func (a *Api) createPlayDateTemplate(c *gin.Context) {
-	player, err := getPlayerFromContext(c)
+	player, err := GetPlayerFromContext(c)
 	if err != nil {
 		c.Redirect(http.StatusFound, "/")
 		return
@@ -346,7 +277,7 @@ func (a *Api) getPlayDateTemplate(c *gin.Context) {
 }
 
 func (a *Api) setPlayDateAttendence(c *gin.Context) {
-	player, err := getPlayerFromContext(c)
+	player, err := GetPlayerFromContext(c)
 	if err != nil {
 		c.Redirect(http.StatusFound, "/")
 		return
@@ -589,25 +520,6 @@ func (a *Api) fetchPoppedDates() {
 	}
 }
 
-func (a *Api) findPlayerFromCookie(c *gin.Context) (*Player, error) {
-	cookie, err := c.Cookie("playdate")
-	if err != nil {
-		msg := "failed to parse user's cookie"
-		log.Err(err).Msg(msg)
-		return nil, errors.New(msg)
-	}
-
-	player := &Player{SessionId: cookie}
-	err = a.db.NewSelect().Model(player).Where("session_id = ?", player.SessionId).Scan(c.Request.Context())
-	if err != nil {
-		// if the given player id doesn't exist just return the called to the home page
-		msg := "failed to find the player from their cookie"
-		log.Err(err).Str("cookie", cookie).Any("player", player).Msg(msg)
-		return nil, errors.New(msg)
-	}
-	return player, nil
-}
-
 func (a *Api) goToRegisterUser(c *gin.Context) {
 	state := gin.H{}
 	state["ServerError"] = nil
@@ -689,11 +601,11 @@ func (a *Api) userLogout(c *gin.Context) {
 // create cookie and redirect to index
 func (a *Api) createPlayDateCookie(c *gin.Context, sessionId string) {
 	c.SetCookie("playdate", string(sessionId), 2000000, "/", "", false, true)
-	// if c.Request.Header.Get("HX-Request") != "" {
-	// 	c.Header("HX-Location", "/")
-	// } else {
-	// }
-	c.Redirect(http.StatusMovedPermanently, "/")
+	if c.Request.Header.Get("HX-Request") != "" {
+		c.Header("HX-Location", "/")
+	} else {
+		c.Redirect(http.StatusMovedPermanently, "/")
+	}
 }
 
 func (a *Api) handleOAuthLogin(c *gin.Context) {
