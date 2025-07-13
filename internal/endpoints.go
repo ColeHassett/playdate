@@ -32,9 +32,9 @@ var (
 func StartAPI(db *bun.DB, dg *discordgo.Session) {
 	api := Api{db: db, dg: dg, ctx: context.Background()}
 
-	router := gin.New()        // NOTE: Not using Default to avoid the wrong logger being used?
-	router.Use(gin.Recovery()) // handle panics (aka unhandled exceptions)
-	gin.SetMode(gin.DebugMode) // adds additional debugging features for the gin http server.
+	router := gin.New()
+	router.Use(gin.Recovery())
+	gin.SetMode(gin.DebugMode)
 
 	// Add the zerolog to gin's middleware
 	router.Use(logger.SetLogger(
@@ -65,18 +65,23 @@ func StartAPI(db *bun.DB, dg *discordgo.Session) {
 	router.GET("/login", api.goToLogin)
 
 	// NOTE: Discord OAuth Routes
-	router.GET("/discord/login", api.handleOAuthLogin)
-	router.GET("/discord/callback", api.handleOAuthCallback)
+	discord := router.Group("/discord")
+	discord.GET("/login", api.handleOAuthLogin)
+	discord.GET("/callback", api.handleOAuthCallback)
 
 	// NOTE: Application Routes
-	router.GET("/playdate", api.showPlayDateForm)
-	router.POST("/playdate", api.createPlayDateTemplate)
-	router.GET("/playdate/:id", api.getPlayDateTemplate)
-	router.POST("/playdate/:id/yes", api.setPlayDateAttendence)
-	router.POST("/playdate/:id/maybe", api.setPlayDateAttendence)
-	router.POST("/playdate/:id/no", api.setPlayDateAttendence)
+	playdate := router.Group("/playdate")
+	playdate.Use(api.cookies())
+	playdate.GET("/", api.showPlayDateForm)
+	playdate.POST("/", api.createPlayDateTemplate)
+	playdate.GET("/:id", api.getPlayDateTemplate)
+	playdate.POST("/:id/yes", api.setPlayDateAttendence)
+	playdate.POST("/:id/maybe", api.setPlayDateAttendence)
+	playdate.POST("/:id/no", api.setPlayDateAttendence)
 
+	// move this else where
 	go api.watchDog()
+
 	err := router.Run("0.0.0.0:8080")
 	if err != nil {
 		log.Err(err).Msg("failed to start web server")
@@ -102,6 +107,71 @@ type GitHubRelease struct {
 	PublishedAt time.Time `json:"published_at"`
 }
 
+// TODO: Clean these methods up, avoid duplicate work
+// function to handle cookie checking for the entire application
+func (a *Api) cookies() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		log.Debug().Msg("starting middleware checking the users cookies...")
+		_, err := a.handlePlayerCookie(c)
+		switch err {
+		case ErrMissingCookie:
+			log.Warn().Msg("request missing cookie")
+			c.Redirect(http.StatusFound, "/")
+			return
+		case ErrPlayerFromCookieNotFound:
+			log.Error().Err(err).Msg(err.Error())
+			a.userLogout(c)
+			return
+		}
+		log.Debug().Msg("finished middleware checking the users cookies, player added to gin context!")
+		// c.Set("player", player)
+		// send request along to the rest of the application
+		c.Next()
+	}
+}
+
+var ErrMissingCookie = errors.New("missing cookie")
+var ErrPlayerFromCookieNotFound = errors.New("player from cookie not found")
+
+// method to handles finding the player from gin.Context, if not found handles routing the request back to the register page.
+func (a *Api) handlePlayerCookie(c *gin.Context) (*Player, error) {
+	cookie, _ := c.Cookie("playdate")
+	log.Debug().Str("Cookie", cookie).Str("HX-Request", c.Request.Header.Get("HX-Request")).Msg("rendering index")
+	if cookie == "" {
+		return nil, ErrMissingCookie
+	}
+	// render actual home page since user has a cookie
+	player, err := a.getPlayerFromCookieString(cookie, c.Request.Context())
+	if err != nil {
+		return nil, ErrPlayerFromCookieNotFound
+	}
+	return player, nil
+}
+
+// attempt to find the associated played from the given cookie
+func (a *Api) getPlayerFromCookieString(cookie string, ctx context.Context) (*Player, error) {
+	player := &Player{SessionId: cookie}
+	err := a.db.NewSelect().Model(player).Where("session_id = ?", player.SessionId).Scan(ctx)
+	if err != nil {
+		// if the given player id doesn't exist just return the called to the home page
+		msg := "failed to find the player from their cookie"
+		log.Err(err).Str("cookie", cookie).Any("player", player).Msg(msg)
+		return nil, errors.New(msg)
+	}
+	return player, nil
+}
+
+var ErrPlayerNotFoundInContext = errors.New("failed to find player in gin context")
+
+func getPlayerFromContext(c *gin.Context) (*Player, error) {
+	playerFromContext, ok := c.Get("player")
+	if !ok {
+		return nil, ErrPlayerNotFoundInContext
+	}
+	player := playerFromContext.(*Player)
+	return player, nil
+}
+
 func (a *Api) watchDog() {
 	log.Info().Msg("Watching for PlayDates..")
 	ticker := time.NewTicker(time.Minute / 2)
@@ -116,23 +186,19 @@ func (a *Api) watchDog() {
 }
 
 func (a *Api) index(c *gin.Context) {
-	cookie, _ := c.Cookie("playdate")
-	log.Debug().Str("Cookie", cookie).Str("HX-Request", c.Request.Header.Get("HX-Request")).Msg("rendering index")
-
-	state := gin.H{"Errors": map[string]string{}}
-	if cookie == "" {
+	player, err := a.handlePlayerCookie(c)
+	switch err {
+	case ErrMissingCookie:
+		log.Warn().Msg("request missing cookie")
 		c.HTML(http.StatusOK, "pages/register.html", gin.H{})
 		return
-	}
-
-	// render actual home page since user has a cookie
-	state["SignedUp"] = true
-	player, err := a.findPlayerFromCookie(c)
-	if err != nil {
-		// delete the cookie that was on the request to avoid an infinite loop
+	case ErrPlayerFromCookieNotFound:
+		log.Error().Err(err).Msg(err.Error())
 		a.userLogout(c)
 		return
 	}
+	state := gin.H{"Errors": map[string]string{}}
+	state["SignedUp"] = true
 
 	// find playdates that are upcoming
 	upcomingPlaydates := []*PlayDate{}
@@ -179,7 +245,7 @@ func (a *Api) showPlayDateForm(c *gin.Context) {
 }
 
 func (a *Api) createPlayDateTemplate(c *gin.Context) {
-	player, err := a.findPlayerFromCookie(c)
+	player, err := getPlayerFromContext(c)
 	if err != nil {
 		c.Redirect(http.StatusFound, "/")
 		return
@@ -237,12 +303,6 @@ func (a *Api) createPlayDateTemplate(c *gin.Context) {
 }
 
 func (a *Api) getPlayDateTemplate(c *gin.Context) {
-	_, err := a.findPlayerFromCookie(c)
-	if err != nil {
-		c.Redirect(http.StatusFound, "/")
-		return
-	}
-
 	state := gin.H{}
 	errors := map[string]string{}
 	id, err := strconv.Atoi(c.Param("id"))
@@ -286,7 +346,7 @@ func (a *Api) getPlayDateTemplate(c *gin.Context) {
 }
 
 func (a *Api) setPlayDateAttendence(c *gin.Context) {
-	player, err := a.findPlayerFromCookie(c)
+	player, err := getPlayerFromContext(c)
 	if err != nil {
 		c.Redirect(http.StatusFound, "/")
 		return
@@ -629,11 +689,11 @@ func (a *Api) userLogout(c *gin.Context) {
 // create cookie and redirect to index
 func (a *Api) createPlayDateCookie(c *gin.Context, sessionId string) {
 	c.SetCookie("playdate", string(sessionId), 2000000, "/", "", false, true)
-	if c.Request.Header.Get("HX-Request") != "" {
-		c.Header("HX-Location", "/")
-	} else {
-		c.Redirect(http.StatusMovedPermanently, "/")
-	}
+	// if c.Request.Header.Get("HX-Request") != "" {
+	// 	c.Header("HX-Location", "/")
+	// } else {
+	// }
+	c.Redirect(http.StatusMovedPermanently, "/")
 }
 
 func (a *Api) handleOAuthLogin(c *gin.Context) {
