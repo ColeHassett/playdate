@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"embed"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"uc181discord/games/bot/internal"
 
@@ -36,27 +39,37 @@ func main() {
 	dg := setupDiscordClient()
 	internal.SetupDiscordHandlers(db, dg)
 	internal.SendPatchNotes(dg)
-	go internal.StartAPI(db, dg) // start webserver on subprocess
+
+	// web server setup, pulled from graceful shutdown example: https://github.com/gin-gonic/examples/blob/master/graceful-shutdown/graceful-shutdown/notify-without-context/server.go
+	handler := internal.NewHandler(db, dg)
+	server := internal.NewServer(handler)
+	go internal.RunServer(server)
 
 	// listen for kill signals from OS
 	<-quit
-	shutdownServer(db, dg)
+	shutdownServer(db, dg, server)
 }
 
-func shutdownServer(db *bun.DB, dg *discordgo.Session) {
+func shutdownServer(db *bun.DB, dg *discordgo.Session, server *http.Server) {
 	log.Info().Msg("Starting server shutdown...")
-	err := db.Close()
-	if err != nil {
-		log.Err(err).Msg("failed to close postgres client")
+
+	// Create server shutdown timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := db.Close(); err != nil {
+		log.Err(err).Msg("failed to gracefully close postgres client")
 	}
-	err = internal.DeleteDiscordCommands(dg)
-	if err != nil {
+	if err := internal.DeleteDiscordCommands(dg); err != nil {
 		log.Err(err).Msg("failed to delete existing discord commands")
 	}
-	err = dg.Close()
-	if err != nil {
-		log.Err(err).Msg("failed to close discord client")
+	if err := dg.Close(); err != nil {
+		log.Err(err).Msg("failed to gracefully close discord client")
 	}
+	if err := server.Shutdown(ctx); err != nil {
+		log.Err(err).Msg("failed to gracefully shutdown web server")
+	}
+
 	log.Info().Msg("Successfully shutdown server")
 }
 

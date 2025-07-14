@@ -29,7 +29,7 @@ var (
 	easternLocation, _ = time.LoadLocation("America/New_York")
 )
 
-func StartAPI(db *bun.DB, dg *discordgo.Session) {
+func NewHandler(db *bun.DB, dg *discordgo.Session) *gin.Engine {
 	api := Api{db: db, dg: dg, ctx: context.Background()}
 
 	router := gin.New()        // NOTE: Not using Default to avoid the wrong logger being used?
@@ -77,9 +77,19 @@ func StartAPI(db *bun.DB, dg *discordgo.Session) {
 	router.POST("/playdate/:id/no", api.setPlayDateAttendence)
 
 	go api.watchDog()
-	err := router.Run("0.0.0.0:8080")
-	if err != nil {
-		log.Err(err).Msg("failed to start web server")
+	return router
+}
+
+func NewServer(handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:    ":8080",
+		Handler: handler,
+	}
+}
+
+func RunServer(server *http.Server) {
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatal().Err(err).Msg("web server failed to listen")
 	}
 }
 
