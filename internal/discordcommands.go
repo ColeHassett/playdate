@@ -44,3 +44,20 @@ func InitAttendanceReactions(a *Api, msg *discordgo.Message) {
 	a.dg.MessageReactionAdd(Config.DiscordConfig.ChannelID, msg.ID, "🤔")
 	a.dg.MessageReactionAdd(Config.DiscordConfig.ChannelID, msg.ID, "👎")
 }
+
+func DeleteDiscordCommands(dg *discordgo.Session) error {
+	log.Info().Msg("Removing Discord Commands..")
+	registeredCommands, err := dg.ApplicationCommands(dg.State.User.ID, Config.DiscordConfig.GuildID)
+	if err != nil {
+		return err
+	}
+	for _, v := range registeredCommands {
+		err := dg.ApplicationCommandDelete(dg.State.User.ID, Config.DiscordConfig.GuildID, v.ID)
+		if err != nil {
+			log.Err(err).Any("Command", v).Msg("Could not delete Discord command")
+			return err
+		}
+	}
+	log.Info().Msg("Done Removing Discord Commands!")
+	return nil
+}

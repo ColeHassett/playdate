@@ -28,8 +28,8 @@ func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
 
 	// capture process kill signals into channel
-	sc := make(chan os.Signal, 1)
-	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM)
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	printBanner()
 	db := setupPostgresClient()
@@ -39,19 +39,25 @@ func main() {
 	go internal.StartAPI(db, dg) // start webserver on subprocess
 
 	// listen for kill signals from OS
-	<-sc
+	<-quit
 	shutdownServer(db, dg)
 }
 
 func shutdownServer(db *bun.DB, dg *discordgo.Session) {
+	log.Info().Msg("Starting server shutdown...")
 	err := db.Close()
 	if err != nil {
 		log.Err(err).Msg("failed to close postgres client")
+	}
+	err = internal.DeleteDiscordCommands(dg)
+	if err != nil {
+		log.Err(err).Msg("failed to delete existing discord commands")
 	}
 	err = dg.Close()
 	if err != nil {
 		log.Err(err).Msg("failed to close discord client")
 	}
+	log.Info().Msg("Successfully shutdown server")
 }
 
 func printBanner() {
