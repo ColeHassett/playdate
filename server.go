@@ -57,6 +57,11 @@ func shutdownServer(db *bun.DB, dg *discordgo.Session, server *http.Server) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	// shutdown the web server first to resolve any open connections
+	if err := server.Shutdown(ctx); err != nil {
+		log.Err(err).Msg("failed to gracefully shutdown web server")
+	}
+
 	if err := db.Close(); err != nil {
 		log.Err(err).Msg("failed to gracefully close postgres client")
 	}
@@ -65,9 +70,6 @@ func shutdownServer(db *bun.DB, dg *discordgo.Session, server *http.Server) {
 	}
 	if err := dg.Close(); err != nil {
 		log.Err(err).Msg("failed to gracefully close discord client")
-	}
-	if err := server.Shutdown(ctx); err != nil {
-		log.Err(err).Msg("failed to gracefully shutdown web server")
 	}
 
 	log.Info().Msg("Successfully shutdown server")
