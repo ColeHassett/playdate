@@ -1,14 +1,19 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"embed"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
+
 	"uc181discord/games/bot/internal"
 
+	"github.com/bwmarrin/discordgo"
 	"github.com/pressly/goose/v3"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -24,21 +29,66 @@ var embedMigrations embed.FS
 func main() {
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
-	sc := make(chan os.Signal, 1)
-	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM)
 
-	// note that this is path referenced from within the docker container
+	// capture process kill signals into channel
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	printBanner()
+	db := setupPostgresClient()
+	dg := setupDiscordClient()
+	internal.SetupDiscordHandlers(db, dg)
+	internal.SendPatchNotes(dg)
+
+	// web server setup, pulled from graceful shutdown example: https://github.com/gin-gonic/examples/blob/master/graceful-shutdown/graceful-shutdown/notify-without-context/server.go
+	handler := internal.NewHandler(db, dg)
+	server := internal.NewServer(handler)
+	go internal.RunServer(server)
+
+	// listen for kill signals from OS
+	<-quit
+	shutdownServer(db, dg, server)
+}
+
+func shutdownServer(db *bun.DB, dg *discordgo.Session, server *http.Server) {
+	log.Info().Msg("Starting server shutdown...")
+
+	// Create server shutdown timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// shutdown the web server first to resolve any open connections
+	if err := server.Shutdown(ctx); err != nil {
+		log.Err(err).Msg("failed to gracefully shutdown web server")
+	}
+
+	if err := db.Close(); err != nil {
+		log.Err(err).Msg("failed to gracefully close postgres client")
+	}
+	if err := internal.DeleteDiscordCommands(dg); err != nil {
+		log.Err(err).Msg("failed to delete existing discord commands")
+	}
+	if err := dg.Close(); err != nil {
+		log.Err(err).Msg("failed to gracefully close discord client")
+	}
+
+	log.Info().Msg("Successfully shutdown server")
+}
+
+func printBanner() {
 	banner, err := os.ReadFile("banner.txt")
 	if err != nil {
 		log.Err(err).Msg("Failed to read banner text file")
 	}
 	fmt.Print(string(banner))
+}
 
+func setupPostgresClient() *bun.DB {
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", internal.Config.PostgresUser, internal.Config.PostgresPassword, internal.Config.PostgresHost, internal.Config.PostgresPort, internal.Config.PostgresDatabase)
 	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
 	db := bun.NewDB(sqldb, pgdialect.New())
-	defer db.Close()
 	db.AddQueryHook(bundebug.NewQueryHook(bundebug.WithVerbose(true)))
+
 	// init m2m relationships the bun way
 	internal.InitializeManyToManyRelationships(db)
 
@@ -57,11 +107,21 @@ func main() {
 		log.Panic().Err(err).Msg("failed to run goose migrations")
 	}
 
-	dg := internal.StartDiscordBot(db) // start discord bot on main process
-	defer internal.StopDiscordBot(dg)
-	go internal.StartAPI(db, dg) // start webserver on subprocess
+	log.Debug().Msg("successfully started postgres client")
+	return db
+}
 
-	// die?
-	<-sc
+func setupDiscordClient() *discordgo.Session {
+	dg, err := discordgo.New("Bot " + internal.Config.DiscordConfig.APIKey)
+	if err != nil {
+		log.Err(err).Msg("failed to create Discord client")
+	}
 
+	err = dg.Open()
+	if err != nil {
+		log.Err(err).Msg("failed to open websocket to Discord")
+	}
+
+	log.Debug().Msg("successfully started discord clinet")
+	return dg
 }
