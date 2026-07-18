@@ -1,5 +1,5 @@
 # Start by building the application.
-FROM golang:1.23 AS builder
+FROM golang:1.25 AS builder
 
 WORKDIR /app/
 COPY go.mod .
@@ -10,6 +10,7 @@ RUN go mod download
 COPY . .
 
 RUN go install github.com/cosmtrek/air@v1.49.0
+RUN go install github.com/a-h/templ/cmd/templ@latest
 
 EXPOSE 8080
 

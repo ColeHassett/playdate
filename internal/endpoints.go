@@ -20,6 +20,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/uptrace/bun"
 	"golang.org/x/crypto/bcrypt"
+
+	"uc181discord/games/bot/templ/pages"
 )
 
 var (
@@ -48,6 +50,10 @@ func NewHandler(db *bun.DB, dg *discordgo.Session) *gin.Engine {
 		"formatTime":   FormatTime,
 		"relativeTime": RelativeTime,
 	})
+
+	// TODO: Testing templ rendering
+	ginHTMLRender := router.HTMLRender
+	router.HTMLRender = &HTMLTemplRenderer{FallbackHtmlRenderer: ginHTMLRender}
 
 	// Template Endpoints
 	router.LoadHTMLGlob(fmt.Sprintf("%s/**/*.html", Config.TemplateDirectory))
@@ -79,6 +85,9 @@ func NewHandler(db *bun.DB, dg *discordgo.Session) *gin.Engine {
 	playdate.POST("/:id/yes", api.setPlayDateAttendence)
 	playdate.POST("/:id/maybe", api.setPlayDateAttendence)
 	playdate.POST("/:id/no", api.setPlayDateAttendence)
+
+	// NOTE: Example templ endpoint
+	router.GET("/test", api.Test)
 
 	go api.watchDog()
 	return router
@@ -673,6 +682,11 @@ func (a *Api) healthCheck(c *gin.Context) {
 		"status":  "healthy",
 		"message": "All services are healthy",
 	})
+}
+
+func (a *Api) Test(c *gin.Context) {
+	r := New(c.Request.Context(), http.StatusOK, pages.Test())
+	c.Render(http.StatusOK, r)
 }
 
 func getGithubReleaseNotes() (g GitHubRelease) {
