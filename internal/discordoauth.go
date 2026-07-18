@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
+	"uc181discord/games/bot/internal/model"
+	"uc181discord/games/bot/internal/util"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -41,7 +43,7 @@ var mu sync.Mutex // Mutex to protect access to oauthStates
 
 func DiscordOAuthLogin(a *Api) (string, error) {
 	// Generate a cryptographically secure random state string for CSRF protection
-	state, err := GenerateRandomState()
+	state, err := util.GenerateRandomState()
 	if err != nil {
 		// http.Error(w, "Failed to generate state", http.StatusInternalServerError)
 		log.Err(err).Msg("error generating state.")
@@ -66,7 +68,7 @@ func DiscordOAuthLogin(a *Api) (string, error) {
 	return authURL, nil
 }
 
-func DiscordOAuthCallback(c *gin.Context, a *Api) (*Player, error) {
+func DiscordOAuthCallback(c *gin.Context, a *Api) (*model.Player, error) {
 	code := c.Query("code")
 	state := c.Query("state")
 	errorParam := c.Query("error")
@@ -113,7 +115,7 @@ func DiscordOAuthCallback(c *gin.Context, a *Api) (*Player, error) {
 	}
 	log.Info().Any("discordUser", discordUser).Msg("successfully grad discord user information")
 
-	sessionId, err := GenerateRandomState()
+	sessionId, err := util.GenerateRandomState()
 	if err != nil {
 		log.Err(err).Msg("failed to generate random state")
 		return nil, err
@@ -124,7 +126,7 @@ func DiscordOAuthCallback(c *gin.Context, a *Api) (*Player, error) {
 		log.Err(err).Msg("failed to hash fake user password for discord oauth workflow")
 		return nil, err
 	}
-	player := &Player{
+	player := &model.Player{
 		Name:             discordUser.Username,
 		Password:         string(hashedPassword),
 		DiscordID:        discordUser.ID,

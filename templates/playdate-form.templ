@@ -1,0 +1,46 @@
+package templates
+
+type PlayDateFormState struct {
+	BaseState
+	Game   string
+	Date   string
+	Errors map[string]string
+}
+
+templ PlayDateForm(state PlayDateFormState) {
+	if state.ServerError != "" {
+		@serverError(state.ServerError)
+	}
+	<div id="create-playdate">
+		<h3 class="">Create PlayDate</h3>
+		<form
+			if len(state.Errors) > 0 {
+				class="was-validated"
+			} else {
+				class="needs-validated"
+			}
+			hx-post="/playdate"
+			hx-swap="outerHTML"
+			hx-target="#create-playdate"
+			novalidate
+		>
+			@formField(field{
+				name:      "Game",
+				label:     "game",
+				fieldType: "text",
+				value:     state.Game,
+				err:       state.Errors["game"],
+				required:  true,
+			})
+			@formField(field{
+				name:      "Date/Time",
+				label:     "date",
+				fieldType: "datetime-local",
+				value:     state.Date,
+				err:       state.Errors["date"],
+				required:  true,
+			})
+			<button class="btn btn-primary" type="submit">Register</button>
+		</form>
+	</div>
+}

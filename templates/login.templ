@@ -1,0 +1,60 @@
+package templates
+
+type LoginState struct {
+	BaseState
+	Name     string
+	Password string
+	Errors   map[string]string
+}
+
+templ Login(state LoginState) {
+	if state.ServerError != "" {
+		@serverError(state.ServerError)
+	}
+	<div id="login">
+		<h3 class="">Sign-in</h3>
+		<form
+			if len(state.Errors) > 0 {
+				class="was-validated"
+			} else {
+				class="needs-validated"
+			}
+			hx-post="/login"
+			hx-swap="outerHTML"
+			hx-target="#login"
+			novalidate
+		>
+			@formField(field{
+				name:      "Name",
+				label:     "name",
+				fieldType: "text",
+				value:     state.Name,
+				err:       state.Errors["name"],
+				required:  true,
+			})
+			@formField(field{
+				name:      "Password",
+				label:     "password",
+				fieldType: "password",
+				value:     state.Password,
+				err:       state.Errors["password"],
+				required:  true,
+			})
+			<button class="btn btn-primary" type="submit">Login</button>
+			<button
+				class="btn btn-primary"
+				hx-get="/register"
+				hx-swap="outerHTML"
+				hx-target="#login"
+				novalidate
+			>
+				Register
+			</button>
+		</form>
+		<br/>
+		<a id="login" href="/discord/login" class="btn btn-primary">
+			<i class="fa-brands fa-discord"></i>
+			<span>Login with Discord</span>
+		</a>
+	</div>
+}

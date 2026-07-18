@@ -1,0 +1,79 @@
+package templates
+
+type RegisterState struct {
+	BaseState
+	Name             string
+	DiscID           string
+	Password         string
+	Errors           map[string]string
+	Verifying        bool
+	VerificationCode string
+}
+
+templ Register(state RegisterState) {
+	if state.ServerError != "" {
+		@serverError(state.ServerError)
+	}
+	<div id="registration">
+		<h3 class="">Register</h3>
+		<form
+			class=""
+			if state.Verifying {
+				hx-post="/verify"
+			} else {
+				hx-post="/register"
+			}
+			hx-swap="outerHTML"
+			hx-target="#registration"
+			novalidate
+		>
+			@formField(field{
+				name:      "Name",
+				label:     "name",
+				fieldType: "text",
+				value:     state.Name,
+				err:       state.Errors["name"],
+				required:  true,
+			})
+			@formField(field{
+				name:      "Password",
+				label:     "password",
+				fieldType: "password",
+				value:     state.Password,
+				err:       state.Errors["password"],
+				required:  true,
+				helpText:  "Password must be alphanumeric",
+			})
+			@formField(field{
+				name:      "Discord ID",
+				label:     "discID",
+				fieldType: "text",
+				value:     state.DiscID,
+				err:       state.Errors["discID"],
+				required:  true,
+			})
+			if state.Verifying {
+				@formField(field{
+					name:      "Verification Code",
+					label:     "verificationCode",
+					fieldType: "text",
+					value:     state.VerificationCode,
+					err:       state.Errors["verificationCode"],
+					required:  true,
+				})
+				<button class="btn btn-primary" type="submit">Verify</button>
+			} else {
+				<button class="btn btn-primary" type="submit">Register</button>
+				<button
+					class="btn btn-primary"
+					hx-get="/login"
+					hx-swap="outerHTML"
+					hx-target="#registration"
+					novalidate
+				>
+					Login
+				</button>
+			}
+		</form>
+	</div>
+}

@@ -2,3 +2,4 @@ postgres/data
 .env
 just.exe
 tmp/
+**/*_templ.go

@@ -1,8 +1,6 @@
 [tools]
 air = "latest"
 go = "latest"
+"go:github.com/a-h/templ/cmd/templ" = "latest"
 "go:github.com/pressly/goose/v3/cmd/goose" = "latest"
 just = "latest"
-node = "latest"
-"npm:prettier" = "latest"
-"npm:prettier-plugin-go-template" = "latest"
