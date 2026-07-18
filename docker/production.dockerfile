@@ -1,6 +1,9 @@
-FROM golang:1.23
+FROM golang:1.25
 
 WORKDIR /app
+
+# Install go templ CLI command to build templ files later
+RUN go install github.com/a-h/templ/cmd/templ@latest
 
 # Copy go.mod and go.sum first to leverage Docker caching
 COPY go.mod go.sum ./
@@ -8,6 +11,9 @@ RUN go mod download
 
 # Copy the rest of the application source code
 COPY . .
+
+# Generate templ files as apart of docker build
+RUN go run github.com/a-h/templ/cmd/templ@latest generate
 
 # Build the Go application
 # CGO_ENABLED=0 is important for static binaries if you were to switch to distroless later,

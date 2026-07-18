@@ -20,6 +20,10 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/uptrace/bun"
 	"golang.org/x/crypto/bcrypt"
+
+	"uc181discord/games/bot/internal/model"
+	"uc181discord/games/bot/internal/util"
+	"uc181discord/games/bot/templates"
 )
 
 var (
@@ -45,13 +49,16 @@ func NewHandler(db *bun.DB, dg *discordgo.Session) *gin.Engine {
 
 	// custom template functions
 	router.SetFuncMap(template.FuncMap{
-		"formatTime":   FormatTime,
-		"relativeTime": RelativeTime,
+		"formatTime":   util.FormatTime,
+		"relativeTime": util.RelativeTime,
 	})
 
+	// Setup Templ Renderer
+	ginHTMLRender := router.HTMLRender
+	router.HTMLRender = &HTMLTemplRenderer{FallbackHtmlRenderer: ginHTMLRender}
+
 	// Template Endpoints
-	router.LoadHTMLGlob(fmt.Sprintf("%s/**/*.html", Config.TemplateDirectory))
-	router.StaticFile("custom-colors.css", fmt.Sprintf("%s/custom-colors.css", Config.TemplateDirectory))
+	router.StaticFile("custom-colors.css", fmt.Sprintf("%s/css/custom-colors.css", Config.TemplateDirectory))
 
 	// NOTE: Login/Registration Routes
 	router.GET("/", api.index)
@@ -130,46 +137,49 @@ func (a *Api) watchDog() {
 }
 
 func (a *Api) index(c *gin.Context) {
+	log.Debug().Msg("in index")
 	player, err := FindPlayerFromPlayDateCookie(a.db, c)
 	switch err {
 	case ErrMissingCookie:
 		log.Warn().Msg("request missing cookie")
-		c.HTML(http.StatusOK, "pages/register.html", gin.H{})
+		renderTempl(c, http.StatusOK, templates.Base(
+			templates.Login(templates.LoginState{}),
+		))
 		return
 	case ErrPlayerFromCookieNotFound:
 		log.Error().Err(err).Msg(err.Error())
 		a.userLogout(c)
 		return
 	}
-	state := gin.H{"Errors": map[string]string{}}
-	state["SignedUp"] = true
+	state := templates.PageState{}
+	state.SignedUp = true
 
 	// find playdates that are upcoming
-	upcomingPlaydates := []*PlayDate{}
+	upcomingPlaydates := []*model.PlayDate{}
 	err = a.db.NewSelect().
 		Model(&upcomingPlaydates).
 		Relation("Owner").
 		Relation("Players").
-		Where("play_date.status = ?", PlayDateStatusPending).
+		Where("play_date.status = ?", model.PlayDateStatusPending).
 		Order("play_date.created_date asc").
 		Scan(a.ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to query for upcoming playdates")
-		state["ServerError"] = "Failed to retrieve upcoming playdates due to a server error. Please try again later."
+		state.ServerError = "Failed to retrieve upcoming playdates due to a server error. Please try again later."
 	}
 
 	// find playdates in the past
-	pastPlaydates := []*PlayDate{}
+	pastPlaydates := []*model.PlayDate{}
 	err = a.db.NewSelect().
 		Model(&pastPlaydates).
 		Relation("Owner").
 		Relation("Players").
-		Where("play_date.status = ?", PlayDateStatusDone).
+		Where("play_date.status = ?", model.PlayDateStatusDone).
 		Order("play_date.created_date desc").
 		Scan(a.ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to query for past playdates")
-		state["ServerError"] = "Failed to retrieve past playdates due to a server error. Please try again later."
+		state.ServerError = "Failed to retrieve past playdates due to a server error. Please try again later."
 	}
 	playdates := append(upcomingPlaydates, pastPlaydates...)
 
@@ -178,17 +188,21 @@ func (a *Api) index(c *gin.Context) {
 		p.Date = p.Date.In(easternLocation)
 	}
 
-	state["PlayDates"] = playdates
-	state["Player"] = player
+	state.PlayDates = playdates
+	state.Player = player
 
-	c.HTML(http.StatusOK, "pages/home.html", state)
+	renderTempl(c, http.StatusOK, templates.Base(
+		templates.Home(state),
+	))
 }
 
 func (a *Api) showPlayDateForm(c *gin.Context) {
-	c.HTML(http.StatusOK, "partials/playdate-form.html", gin.H{})
+	log.Debug().Msg("in showPlayDateForm")
+	renderTempl(c, http.StatusOK, templates.PlayDateForm(templates.PlayDateFormState{}))
 }
 
 func (a *Api) createPlayDateTemplate(c *gin.Context) {
+	log.Debug().Msg("in createPlayDateTemplate")
 	player, err := GetPlayerFromContext(c)
 	if err != nil {
 		c.Redirect(http.StatusFound, "/")
@@ -198,7 +212,10 @@ func (a *Api) createPlayDateTemplate(c *gin.Context) {
 	inputGame := c.PostForm("game")
 	inputDatetime := c.PostForm("date")
 
-	formData := gin.H{"Game": inputGame, "Date": inputDatetime}
+	formData := templates.PlayDateFormState{
+		Game: inputGame,
+		Date: inputDatetime,
+	}
 	errors := map[string]string{}
 	if inputGame == "" {
 		errors["game"] = "game is required"
@@ -212,30 +229,30 @@ func (a *Api) createPlayDateTemplate(c *gin.Context) {
 	parsedDatetime, err := time.ParseInLocation(expectedTimeLayout, inputDatetime, easternLocation)
 	now := time.Now().In(easternLocation)
 	if err != nil {
-		formData["Date"] = ""
+		formData.Date = ""
 		errors["date"] = "invalid format for date/time, please use layout 2025-01-01T12:00"
 	} else if parsedDatetime.Before(now) {
-		formData["Date"] = ""
+		formData.Date = ""
 		errors["date"] = fmt.Sprintf("can not make a playdate in the past, %v is before %v", parsedDatetime, now)
 	}
-	formData["Errors"] = errors
+	formData.Errors = errors
 	if len(errors) > 0 {
-		c.HTML(http.StatusOK, "partials/playdate-form.html", formData)
+		renderTempl(c, http.StatusOK, templates.PlayDateForm(formData))
 		return
 	}
 	log.Debug().Str("datetime", parsedDatetime.String()).Msg("*** Checking time prior to db")
 
-	playdate := PlayDate{Game: inputGame, Date: parsedDatetime, OwnerId: player.ID}
+	playdate := model.PlayDate{Game: inputGame, Date: parsedDatetime, OwnerId: player.ID}
 	_, err = a.db.NewInsert().Model(&playdate).Exec(a.ctx)
 	if err != nil {
 		log.Err(err).Any("playdate", playdate).Msg("failed to insert new playdate")
-		formData["ServerError"] = err
-		c.HTML(http.StatusOK, "partials/playdate-form.html", formData)
+		formData.ServerError = err.Error()
+		renderTempl(c, http.StatusOK, templates.PlayDateForm(formData))
 		return
 	}
 
 	// send notification to configure channel to share the new playdate to the masses!
-	msg := fmt.Sprintf("Playdate %s at %s by %s! Check it out here: https://playdate.colinthatcher.dev/playdate/%d", playdate.Game, FormatTime(&playdate.Date), player.Name, playdate.ID)
+	msg := fmt.Sprintf("Playdate %s at %s by %s! Check it out here: https://playdate.colinthatcher.dev/playdate/%d", playdate.Game, util.FormatTime(playdate.Date), player.Name, playdate.ID)
 	dgMsg, err := sendChannelMessage(a.dg, Config.DiscordConfig.ChannelID, msg)
 	if err != nil {
 		log.Err(err).Any("playdate", playdate).Msg("failed to send message for new playdate to discord")
@@ -247,7 +264,8 @@ func (a *Api) createPlayDateTemplate(c *gin.Context) {
 }
 
 func (a *Api) getPlayDateTemplate(c *gin.Context) {
-	state := gin.H{}
+	log.Debug().Msg("in getPlayDateTemplate")
+	state := templates.PlayDateState{}
 	errors := map[string]string{}
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -258,7 +276,7 @@ func (a *Api) getPlayDateTemplate(c *gin.Context) {
 	}
 
 	log.Info().Int("id", id).Msg("Querying for players related to playdate")
-	playdate := &PlayDate{ID: id}
+	playdate := &model.PlayDate{ID: id}
 	err = a.db.NewSelect().Model(playdate).Relation("Owner").WherePK().Scan(c.Request.Context())
 	if err != nil {
 		// if the given id doesn't exist just return the called to the home page
@@ -266,7 +284,7 @@ func (a *Api) getPlayDateTemplate(c *gin.Context) {
 		c.Redirect(http.StatusFound, "/")
 		return
 	}
-	playdatePlayers := []*PlayDateToPlayer{}
+	playdatePlayers := []*model.PlayDateToPlayer{}
 	err = a.db.NewSelect().Model(&playdatePlayers).Relation("Player").Where("playdate_id = ?", id).Scan(c.Request.Context())
 	if err != nil {
 		// report error back to user, but just render the page like normal
@@ -278,18 +296,19 @@ func (a *Api) getPlayDateTemplate(c *gin.Context) {
 	// NOTE: Manually parse timestamp into eastern time
 	playdate.Date = playdate.Date.In(easternLocation)
 	playdate.CreatedDate = playdate.CreatedDate.In(easternLocation)
-	state["Errors"] = errors
-	state["PlayDate"] = playdate
-	state["PlayDatePlayers"] = playdatePlayers
+	state.Errors = errors
+	state.PlayDate = playdate
+	state.PlayDatePlayers = playdatePlayers
 	log.Debug().Interface("playdate", playdate).Msg("Playdate details")
 	if c.Request.Header.Get("HX-Request") == "" {
-		c.HTML(http.StatusOK, "pages/playdate.html", state)
+		renderTempl(c, http.StatusOK, templates.Base(templates.PlayDate(state)))
 	} else {
-		c.HTML(http.StatusOK, "partials/playdate.html", state)
+		renderTempl(c, http.StatusOK, templates.PlayDate(state))
 	}
 }
 
 func (a *Api) setPlayDateAttendence(c *gin.Context) {
+	log.Debug().Msg("in setPlayDateAttendence")
 	player, err := GetPlayerFromContext(c)
 	if err != nil {
 		c.Redirect(http.StatusFound, "/")
@@ -299,7 +318,7 @@ func (a *Api) setPlayDateAttendence(c *gin.Context) {
 	// TODO: This can probably be cleaned up somehow
 	uriParts := strings.Split(c.Request.RequestURI, "/")
 	inputAction := uriParts[len(uriParts)-1]
-	attendance := AttendanceFrom(inputAction) // parse input attendence action to internal enum
+	attendance := model.AttendanceFrom(inputAction) // parse input attendence action to internal enum
 	log.Debug().Any("action", attendance).Msg("received attendance action")
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -309,7 +328,7 @@ func (a *Api) setPlayDateAttendence(c *gin.Context) {
 		return
 	}
 
-	playdate := &PlayDate{ID: id}
+	playdate := &model.PlayDate{ID: id}
 	err = a.db.NewSelect().Model(playdate).WherePK().Scan(c.Request.Context())
 	if err != nil {
 		// if the given id doesn't exist just return the called to the home page
@@ -320,7 +339,7 @@ func (a *Api) setPlayDateAttendence(c *gin.Context) {
 
 	log.Info().Int("playdateID", playdate.ID).Int("playerID", player.ID).Any("action", attendance).Msg("attempting to set playdate attendance")
 	errors := map[string]string{}
-	rel := &PlayDateToPlayer{PlayDateID: playdate.ID, PlayerID: player.ID, Attending: attendance}
+	rel := &model.PlayDateToPlayer{PlayDateID: playdate.ID, PlayerID: player.ID, Attending: attendance}
 	_, err = a.db.NewInsert().Model(rel).On("CONFLICT (playdate_id, player_id) DO UPDATE").Set("attending = EXCLUDED.attending").Exec(a.ctx)
 	if err != nil {
 		// send error back to user within the players-table.html
@@ -330,7 +349,7 @@ func (a *Api) setPlayDateAttendence(c *gin.Context) {
 		log.Info().Interface("relation", rel).Msg("successfully inserted playdate to player relation")
 	}
 
-	playdatePlayers := []*PlayDateToPlayer{}
+	playdatePlayers := []*model.PlayDateToPlayer{}
 	err = a.db.NewSelect().Model(&playdatePlayers).Relation("Player").Where("playdate_id = ?", playdate.ID).Scan(c.Request.Context())
 	if err != nil {
 		// report error back to user, but just render the page like normal
@@ -338,24 +357,29 @@ func (a *Api) setPlayDateAttendence(c *gin.Context) {
 		errors["PlayDatePlayers"] = err.Error()
 	}
 
-	state := gin.H{}
-	state["Errors"] = errors
-	state["PlayDatePlayers"] = playdatePlayers
-	state["PlayDate"] = playdate
-	c.HTML(http.StatusOK, "partials/players-table.html", state)
+	state := templates.PlayDateState{}
+	state.Errors = errors
+	state.PlayDatePlayers = playdatePlayers
+	state.PlayDate = playdate
+	renderTempl(c, http.StatusOK, templates.PlayDateTable(state))
 }
 
 func (a *Api) registerUserTemplate(c *gin.Context) {
+	log.Debug().Msg("in registerUserTemplate")
 	name := c.PostForm("name")
 	discID := c.PostForm("discID")
 	pass := c.PostForm("password")
 
-	formData := gin.H{"Name": name, "DiscID": discID, "Password": pass}
+	formData := templates.RegisterState{
+		Name:     name,
+		DiscID:   discID,
+		Password: pass,
+	}
 	errors := map[string]string{}
-	r, _ := regexp.Compile("[^a-zA-Z0-9]")
+	regex, _ := regexp.Compile("[^a-zA-Z0-9]")
 	if name == "" {
 		errors["name"] = "name is required"
-	} else if r.MatchString(name) {
+	} else if regex.MatchString(name) {
 		errors["password"] = "name must be alphanumeric"
 	}
 	if discID == "" {
@@ -363,52 +387,52 @@ func (a *Api) registerUserTemplate(c *gin.Context) {
 	}
 	if pass == "" {
 		errors["password"] = "password is required"
-	} else if r.MatchString(pass) {
+	} else if regex.MatchString(pass) {
 		errors["password"] = "password must be alphanumeric"
 	}
 
-	player := Player{Name: name}
+	player := model.Player{Name: name}
 	duplicate, err := a.db.NewSelect().Model(&player).Where("name = ?", player.Name).Exists(a.ctx)
 	if err != nil {
 		log.Err(err).Msg("Failed to check DB for existing username")
-		formData["ServerError"] = "Not your fault, server is cooked. Try again?"
-		c.HTML(http.StatusOK, "partials/register.html", formData)
+		formData.ServerError = "Not your fault, server is cooked. Try again?"
+		renderTempl(c, http.StatusOK, templates.Register(formData))
 		return
 	}
 	if duplicate {
 		errors["name"] = "name is taken"
 	}
 	if len(errors) > 0 {
-		formData["Errors"] = errors
+		formData.Errors = errors
 		log.Debug().Any("errors", errors).Msg("form data didn't meet validation")
-		c.HTML(http.StatusOK, "partials/register.html", formData)
+		renderTempl(c, http.StatusOK, templates.Register(formData))
 		return
 	}
 
 	bytes, err := bcrypt.GenerateFromPassword([]byte(c.PostForm("password")), bcrypt.DefaultCost)
 	if err != nil {
 		log.Err(err).Msg("failed to hash password")
-		formData["ServerError"] = err.Error()
-		c.HTML(http.StatusOK, "partials/register.html", formData)
+		formData.ServerError = err.Error()
+		renderTempl(c, http.StatusOK, templates.Register(formData))
 		return
 	}
-	sessionId, err := GenerateRandomState()
+	sessionId, err := util.GenerateRandomState()
 	if err != nil {
 		log.Err(err).Msg("failed to generate session id")
-		formData["ServerError"] = err.Error()
-		c.HTML(http.StatusOK, "partials/register.html", formData)
+		formData.ServerError = err.Error()
+		renderTempl(c, http.StatusOK, templates.Register(formData))
 		return
 	}
 
-	player = Player{Name: name, DiscordID: discID, Password: string(bytes), SessionId: sessionId}
+	player = model.Player{Name: name, DiscordID: discID, Password: string(bytes), SessionId: sessionId}
 	err = a.db.NewSelect().Model(&player).Where("discord_id = ?", player.DiscordID).Scan(a.ctx)
 	if err != nil {
 		player.VerificationCode = uuid.NewString()
 		_, err := a.db.NewInsert().Model(&player).Exec(a.ctx)
 		if err != nil {
 			log.Err(err).Msg("failed to create new player")
-			formData["ServerError"] = err.Error()
-			c.HTML(http.StatusOK, "partials/register.html", formData)
+			formData.ServerError = err.Error()
+			renderTempl(c, http.StatusOK, templates.Register(formData))
 			return
 		}
 	} else {
@@ -417,8 +441,8 @@ func (a *Api) registerUserTemplate(c *gin.Context) {
 		_, err = a.db.NewUpdate().Model(&player).Where("discord_id = ?", player.DiscordID).Exec(a.ctx)
 		if err != nil {
 			log.Err(err).Msg("failed to update player with new verification code")
-			formData["ServerError"] = err.Error()
-			c.HTML(http.StatusOK, "partials/register.html", formData)
+			formData.ServerError = err.Error()
+			renderTempl(c, http.StatusOK, templates.Register(formData))
 			return
 		}
 	}
@@ -426,8 +450,8 @@ func (a *Api) registerUserTemplate(c *gin.Context) {
 	channel, err := createUserChannel(a.dg, discID)
 	if err != nil {
 		log.Err(err).Any("player", player).Msg("failed to create private channel to send verification code")
-		formData["ServerError"] = "Invalid Discord ID"
-		c.HTML(http.StatusOK, "partials/register.html", formData)
+		formData.ServerError = "Invalid Discord ID"
+		renderTempl(c, http.StatusOK, templates.Register(formData))
 		return
 	}
 	_, err = sendChannelMessage(
@@ -437,21 +461,27 @@ func (a *Api) registerUserTemplate(c *gin.Context) {
 	)
 	if err != nil {
 		log.Err(err).Any("player", player).Msg("failed to send verification code to user directly")
-		formData["ServerError"] = err.Error()
-		c.HTML(http.StatusOK, "partials/register.html", formData)
+		formData.ServerError = err.Error()
+		renderTempl(c, http.StatusOK, templates.Register(formData))
 		return
 	}
 
-	formData["Verifying"] = true
-	c.HTML(http.StatusOK, "partials/register.html", formData)
+	formData.Verifying = true
+	renderTempl(c, http.StatusOK, templates.Register(formData))
 }
 
 func (a *Api) verifyPlayer(c *gin.Context) {
+	log.Debug().Msg("in verifyPlayer")
 	name := c.PostForm("name")
 	discID := c.PostForm("discID")
 	verificationCode := c.PostForm("verificationCode")
 
-	formData := gin.H{"Name": name, "DiscID": discID, "Verifying": true, "VerificationCode": verificationCode}
+	formData := templates.RegisterState{
+		Name:             name,
+		DiscID:           discID,
+		Verifying:        true,
+		VerificationCode: verificationCode,
+	}
 	errors := map[string]string{}
 	if name == "" {
 		errors["name"] = "name is required"
@@ -463,28 +493,28 @@ func (a *Api) verifyPlayer(c *gin.Context) {
 		errors["verificationCode"] = "verificationCode is required"
 	}
 	if len(errors) > 0 {
-		formData["Errors"] = errors
+		formData.Errors = errors
 		log.Debug().Any("errors", errors).Msg("form data didn't meet validation")
-		c.HTML(http.StatusOK, "partials/register.html", formData)
+		renderTempl(c, http.StatusOK, templates.Register(formData))
 		return
 	}
 
-	player := Player{Name: name, DiscordID: discID}
+	player := model.Player{Name: name, DiscordID: discID}
 	err := a.db.NewSelect().Model(&player).Where("discord_id = ?", player.DiscordID).Scan(a.ctx)
 	if err != nil {
 		log.Err(err).Any("player", player).Msg("failed to find player")
-		formData["ServerError"] = err.Error()
-		c.HTML(http.StatusOK, "partials/register.html", formData)
+		formData.ServerError = err.Error()
+		renderTempl(c, http.StatusOK, templates.Register(formData))
 		return
 	}
 
 	// check if the verifcation codes match, otherwise reroute back to registration
 	if player.VerificationCode != verificationCode {
-		formData["VerificationCode"] = "" // required to show error message
+		formData.VerificationCode = "" // required to show error message
 		errors["verificationCode"] = "invalid verification code provided"
-		formData["Errors"] = errors
+		formData.Errors = errors
 		log.Debug().Any("player", player).Any("errors", errors).Msg("provided verification code didn't match our records")
-		c.HTML(http.StatusOK, "partials/register.html", formData)
+		renderTempl(c, http.StatusOK, templates.Register(formData))
 		return
 	}
 
@@ -496,14 +526,14 @@ func (a *Api) fetchPoppedDates() {
 	state := gin.H{"Errors": map[string]string{}}
 
 	now := time.Now()
-	playdates := []*PlayDate{}
+	playdates := []*model.PlayDate{}
 	err := a.db.NewSelect().
 		Model(&playdates).
 		Relation("Owner").
 		Relation("Attendances").
 		Relation("Attendances.Player"). // NOTE: this will prefetch the nested attendance relationship's player relationship :fire:
 		Where("date <= ?", now.Format("2006-01-02T15:04")).
-		Where("status = ?", PlayDateStatusPending).
+		Where("status = ?", model.PlayDateStatusPending).
 		Scan(a.ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Watch is Kill")
@@ -514,7 +544,7 @@ func (a *Api) fetchPoppedDates() {
 	for _, playdate := range playdates {
 		atAttendingPlayers := ""
 		for _, attendance := range playdate.Attendances {
-			if attendance.Attending == AttendanceNo {
+			if attendance.Attending == model.AttendanceNo {
 				continue
 			}
 			atAttendingPlayers = atAttendingPlayers + fmt.Sprintf("<@%s>", attendance.Player.DiscordID)
@@ -525,7 +555,7 @@ func (a *Api) fetchPoppedDates() {
 			log.Err(err).Any("playdate", playdate).Msg("failed to send message for playdate")
 		}
 		// mark a playdate as done if its "popped"
-		playdate.Status = PlayDateStatusDone
+		playdate.Status = model.PlayDateStatusDone
 		_, err = a.db.NewUpdate().Model(playdate).WherePK().Exec(a.ctx)
 		if err != nil {
 			log.Err(err).Any("playdate", playdate).Msg("failed to update playdate status")
@@ -535,22 +565,27 @@ func (a *Api) fetchPoppedDates() {
 }
 
 func (a *Api) goToRegisterUser(c *gin.Context) {
-	state := gin.H{}
-	state["ServerError"] = nil
-	c.HTML(http.StatusOK, "partials/register.html", state)
+	log.Debug().Msg("in goToRegisterUser")
+	state := templates.RegisterState{}
+	renderTempl(c, http.StatusOK, templates.Register(state))
 }
 
 func (a *Api) goToLogin(c *gin.Context) {
-	state := gin.H{}
-	state["ServerError"] = nil
-	c.HTML(http.StatusOK, "partials/login.html", state)
+	log.Debug().Msg("in goToLogin")
+	renderTempl(c, http.StatusOK, templates.Base(
+		templates.Login(templates.LoginState{}),
+	))
 }
 
 func (a *Api) userLogin(c *gin.Context) {
+	log.Debug().Msg("in userLogin")
 	name := c.PostForm("name")
 	pass := c.PostForm("password")
 
-	formData := gin.H{"Name": name, "Password": pass}
+	formData := templates.LoginState{
+		Name:     name,
+		Password: pass,
+	}
 	errors := map[string]string{}
 	if name == "" {
 		errors["name"] = "name is required"
@@ -559,42 +594,42 @@ func (a *Api) userLogin(c *gin.Context) {
 		errors["pass"] = "password is required"
 	}
 	if len(errors) > 0 {
-		formData["Errors"] = errors
+		formData.Errors = errors
 		log.Debug().Any("errors", errors).Msg("form data didn't meet validation")
-		c.HTML(http.StatusOK, "partials/login.html", formData)
+		renderTempl(c, http.StatusOK, templates.Login(formData))
 		return
 	}
 
-	player := &Player{Name: name}
+	player := &model.Player{Name: name}
 	err := a.db.NewSelect().Model(player).Where("name = ?", player.Name).Scan(a.ctx)
 	if err != nil {
 		log.Err(err).Any("player", player).Msg("failed to find player")
-		formData["ServerError"] = "User doesn't exist"
-		c.HTML(http.StatusOK, "partials/login.html", formData)
+		formData.ServerError = "User doesn't exist"
+		renderTempl(c, http.StatusOK, templates.Login(formData))
 		return
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(player.Password), []byte(pass))
 	if err != nil {
 		log.Err(err).Any("player", player).Msg("Invalid Password")
-		formData["ServerError"] = "Invalid Password"
-		c.HTML(http.StatusOK, "partials/login.html", formData)
+		formData.ServerError = "Invalid Password"
+		renderTempl(c, http.StatusOK, templates.Login(formData))
 		return
 	}
 
-	newSessionId, err := GenerateRandomState()
+	newSessionId, err := util.GenerateRandomState()
 	if err != nil {
 		log.Err(err).Msg("failed to generate session id")
-		formData["ServerError"] = err.Error()
-		c.HTML(http.StatusOK, "partials/register.html", formData)
+		formData.ServerError = err.Error()
+		renderTempl(c, http.StatusOK, templates.Login(formData))
 		return
 	}
 	player.SessionId = newSessionId
 	_, err = a.db.NewUpdate().Model(player).WherePK().Exec(a.ctx)
 	if err != nil {
 		log.Err(err).Msg("failed to update users session id")
-		formData["ServerError"] = err.Error()
-		c.HTML(http.StatusOK, "partials/register.html", formData)
+		formData.ServerError = err.Error()
+		renderTempl(c, http.StatusOK, templates.Login(formData))
 		return
 	}
 
@@ -603,6 +638,7 @@ func (a *Api) userLogin(c *gin.Context) {
 
 // TODO: This isn't working
 func (a *Api) userLogout(c *gin.Context) {
+	log.Debug().Msg("in userLogout")
 	// TODO: delete existing session id
 	c.SetCookie("playdate", "", -1, "/", "", false, true)
 	if c.Request.Header.Get("HX-Request") != "" {
@@ -614,6 +650,7 @@ func (a *Api) userLogout(c *gin.Context) {
 
 // create cookie and redirect to index
 func (a *Api) createPlayDateCookie(c *gin.Context, sessionId string) {
+	log.Debug().Msg("in createPlayDateCookie")
 	c.SetCookie("playdate", string(sessionId), 2000000, "/", "", false, true)
 	if c.Request.Header.Get("HX-Request") != "" {
 		c.Header("HX-Location", "/")
@@ -623,6 +660,7 @@ func (a *Api) createPlayDateCookie(c *gin.Context, sessionId string) {
 }
 
 func (a *Api) handleOAuthLogin(c *gin.Context) {
+	log.Debug().Msg("in handleOAuthLogin")
 	authURL, err := DiscordOAuthLogin(a)
 	if err != nil {
 		log.Err(err).Msg("failed to oauth login")
@@ -636,6 +674,7 @@ func (a *Api) handleOAuthLogin(c *gin.Context) {
 }
 
 func (a *Api) handleOAuthCallback(c *gin.Context) {
+	log.Debug().Msg("in handleOAuthCallback")
 	player, err := DiscordOAuthCallback(c, a)
 	if err != nil {
 		log.Err(err).Msg("failed oauth callback")
@@ -646,6 +685,7 @@ func (a *Api) handleOAuthCallback(c *gin.Context) {
 }
 
 func (a *Api) healthCheck(c *gin.Context) {
+	log.Debug().Msg("in healthCheck")
 	// Check PostgreSQL connection
 	err := a.db.Ping()
 	if err != nil {
@@ -679,6 +719,7 @@ func (a *Api) healthCheck(c *gin.Context) {
 }
 
 func getGithubReleaseNotes() (g GitHubRelease) {
+	log.Debug().Msg("in getGithubReleaseNotes")
 	url := "https://api.github.com/repos/colehassett/playdate/releases/latest"
 
 	// Create a new HTTP client with a timeout

@@ -1,4 +1,4 @@
-package internal
+package util
 
 import (
 	"crypto/rand"
@@ -10,10 +10,7 @@ import (
 const timeFormat = "Jan 2 2006 at 03:04 PM"
 
 // FormatTime formats a time.Time object into a human-readable string format.
-func FormatTime(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
+func FormatTime(t time.Time) string {
 	return t.Format(timeFormat)
 }
 

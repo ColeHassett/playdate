@@ -1,0 +1,84 @@
+package templates
+
+import (
+	"fmt"
+	"uc181discord/games/bot/internal/model"
+	"uc181discord/games/bot/internal/util"
+)
+
+type PageState struct {
+	BaseState
+	Player    *model.Player
+	PlayDates []*model.PlayDate
+	Errors    map[string]string
+	SignedUp  bool
+}
+
+templ Home(state PageState) {
+	if state.ServerError != "" {
+		@serverError(state.ServerError)
+	} else {
+		<div id="home">
+			<div class="d-flex">
+				<a
+					class="btn btn-primary"
+					hx-get="/playdate"
+					hx-swap="outerHTML"
+					hx-target="#home"
+				>Create PlayDate!</a>
+				<div class="ms-auto">
+					<a class="btn btn-info btn-secondary disabled">{ state.Player.Name }</a>
+					<a
+						class="btn btn-danger btn-secondary"
+						hx-delete="/logout"
+						hx-target="body"
+						hx-swap="outerHTML"
+					>Logout</a>
+				</div>
+			</div>
+			<hr/>
+			<h3>Scheduled PlayDates!</h3>
+			<table class="table table-striped table-hover table-responsive">
+				<thead>
+					<th scope="col">#</th>
+					<th scope="col">Game</th>
+					<th scope="col">Owner</th>
+					<th scope="col">Date & Time</th>
+					<th scope="col">Count Down</th>
+					<th scope="col">Status</th>
+					<th scope="col"># Signed up Players</th>
+				</thead>
+				<tbody>
+					if len(state.PlayDates) == 0 {
+						<tr>
+							<th scope="row">No PlayDates scheduled.</th>
+							<td></td>
+							<td></td>
+							<td></td>
+							<td></td>
+							<td></td>
+							<td></td>
+						</tr>
+					} else {
+						for _, date := range state.PlayDates {
+							<tr
+								hx-get={ fmt.Sprintf("/playdate/%d", date.ID) }
+								hx-target="#home"
+								hx-swap="outerHTML"
+								hx-push-url="true"
+							>
+								<th scope="row">{ date.ID }</th>
+								<td>{ date.Game }</td>
+								<td>{ date.Owner.Name }</td>
+								<td>{ util.FormatTime(date.Date) }</td>
+								<td>{ util.RelativeTime(date.Date) }</td>
+								<td>{ date.Status }</td>
+								<td>{ len(date.Players) }</td>
+							</tr>
+						}
+					}
+				</tbody>
+			</table>
+		</div>
+	}
+}

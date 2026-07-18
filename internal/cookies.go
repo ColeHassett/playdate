@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 
+	"uc181discord/games/bot/internal/model"
+
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 	"github.com/uptrace/bun"
@@ -39,7 +41,7 @@ func CookiesMiddleware(api *Api) gin.HandlerFunc {
 
 // Given a request context return the player found. The player is verified to exist in the database and
 // the sessionId is verified againt the database aswell.
-func FindPlayerFromPlayDateCookie(db *bun.DB, c *gin.Context) (*Player, error) {
+func FindPlayerFromPlayDateCookie(db *bun.DB, c *gin.Context) (*model.Player, error) {
 	cookie, _ := c.Cookie("playdate")
 	if cookie == "" {
 		return nil, ErrMissingCookie
@@ -53,18 +55,18 @@ func FindPlayerFromPlayDateCookie(db *bun.DB, c *gin.Context) (*Player, error) {
 }
 
 // Retrieve the player from the gin context
-func GetPlayerFromContext(c *gin.Context) (*Player, error) {
+func GetPlayerFromContext(c *gin.Context) (*model.Player, error) {
 	playerFromContext, ok := c.Get("player")
 	if !ok {
 		return nil, ErrPlayerNotFoundInContext
 	}
-	player := playerFromContext.(*Player)
+	player := playerFromContext.(*model.Player)
 	return player, nil
 }
 
 // Given a cookie string find the associated player within the database
-func getPlayerFromCookieString(db *bun.DB, cookie string, ctx context.Context) (*Player, error) {
-	player := &Player{SessionId: cookie}
+func getPlayerFromCookieString(db *bun.DB, cookie string, ctx context.Context) (*model.Player, error) {
+	player := &model.Player{SessionId: cookie}
 	err := db.NewSelect().Model(player).Where("session_id = ?", player.SessionId).Scan(ctx)
 	if err != nil {
 		// if the given player id doesn't exist just return the called to the home page

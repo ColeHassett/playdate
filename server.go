@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"uc181discord/games/bot/internal"
+	"uc181discord/games/bot/internal/model"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/pressly/goose/v3"
@@ -92,7 +93,7 @@ func setupPostgresClient() *bun.DB {
 	db.AddQueryHook(bundebug.NewQueryHook(bundebug.WithVerbose(true)))
 
 	// init m2m relationships the bun way
-	internal.InitializeManyToManyRelationships(db)
+	model.InitializeManyToManyRelationships(db)
 
 	// Check the connection
 	if err := db.Ping(); err != nil {

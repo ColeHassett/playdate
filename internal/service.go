@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"uc181discord/games/bot/internal/model"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/rs/zerolog/log"
@@ -34,16 +35,16 @@ func SendPatchNotes(dg *discordgo.Session) {
 	}
 }
 
-func extractPlayerFromDiscord(i *discordgo.InteractionCreate, db *bun.DB) *Player {
+func extractPlayerFromDiscord(i *discordgo.InteractionCreate, db *bun.DB) *model.Player {
 	if strings.Compare(i.Member.User.ID, "") == 0 {
 		log.Error().Any("interaction", i).Msg("received empty string for discord user id")
 	}
 
 	// get or create new reference to the player
-	var player Player
+	var player model.Player
 	err := db.NewSelect().Model(&player).Scan(context.Background())
 	if err != nil {
-		player = Player{
+		player = model.Player{
 			Name: i.Member.User.ID,
 		}
 		_, err := db.NewInsert().Model(&player).Exec(context.Background())
@@ -86,7 +87,7 @@ func setPlayDateAttendenceFromDisc(db *bun.DB, dg *discordgo.Session, r *discord
 		return
 	}
 
-	attendance := AttendanceFrom(react) // parse input attendence action to internal enum
+	attendance := model.AttendanceFrom(react) // parse input attendence action to internal enum
 	msgSplit := strings.Split(msg.Content, "/")
 	if len(msgSplit) <= 1 {
 		log.Debug().Msg("Not a playdate")
@@ -98,19 +99,19 @@ func setPlayDateAttendenceFromDisc(db *bun.DB, dg *discordgo.Session, r *discord
 		return
 	}
 
-	playdate := &PlayDate{ID: pId}
+	playdate := &model.PlayDate{ID: pId}
 	err = db.NewSelect().Model(playdate).WherePK().Scan(ctx)
 	if err != nil {
 		log.Err(err).Int("playdateID", pId).Msg("failed to find playdate")
 		return
 	}
-	if playdate.Status != PlayDateStatusPending {
+	if playdate.Status != model.PlayDateStatusPending {
 		log.Debug().Msg("PlayDate already happened")
 		return
 	}
 
 	log.Info().Int("playdateID", playdate.ID).Str("discordId", discId).Any("action", attendance).Msg("attempting to set playdate attendance")
-	player := &Player{DiscordID: discId}
+	player := &model.Player{DiscordID: discId}
 	err = db.NewSelect().Model(player).Where("discord_id = ?", player.DiscordID).Scan(ctx)
 	if err != nil {
 		log.Err(err).Str("discID", discId).Msg("failed to find player")
@@ -121,7 +122,7 @@ func setPlayDateAttendenceFromDisc(db *bun.DB, dg *discordgo.Session, r *discord
 		}
 		return
 	}
-	rel := &PlayDateToPlayer{PlayDateID: playdate.ID, PlayerID: player.ID, Attending: attendance}
+	rel := &model.PlayDateToPlayer{PlayDateID: playdate.ID, PlayerID: player.ID, Attending: attendance}
 	_, err = db.NewInsert().Model(rel).On("CONFLICT (playdate_id, player_id) DO UPDATE").Set("attending = EXCLUDED.attending").Exec(ctx)
 	if err != nil {
 		// send error back to user within the players-table.html
@@ -130,7 +131,7 @@ func setPlayDateAttendenceFromDisc(db *bun.DB, dg *discordgo.Session, r *discord
 		log.Info().Interface("relation", rel).Msg("successfully inserted playdate to player relation")
 	}
 
-	playdatePlayers := []*PlayDateToPlayer{}
+	playdatePlayers := []*model.PlayDateToPlayer{}
 	err = db.NewSelect().Model(&playdatePlayers).Relation("Player").Where("playdate_id = ?", playdate.ID).Scan(ctx)
 	if err != nil {
 		// report error back to user, but just render the page like normal
