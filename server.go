@@ -34,8 +34,8 @@ func main() {
 	printBanner()
 	db := setupPostgresClient()
 	dg := setupDiscordClient()
-	internal.SetupDiscordHandlers(db, dg)
-	internal.SendPatchNotes(dg)
+	// internal.SetupDiscordHandlers(db, dg)
+	// internal.SendPatchNotes(dg)
 	go internal.StartAPI(db, dg) // start webserver on subprocess
 
 	// listen for kill signals from OS
