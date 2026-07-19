@@ -12,7 +12,6 @@ jobs:
     runs-on: ubuntu-latest # Specify the runner environment
 
     steps:
-
       # pulled from: https://github.com/coollabsio/coolify/discussions/2924#discussioncomment-11196215
       - name: Pin the sha version within Coolify
         uses: fjogeleit/http-request-action@v1

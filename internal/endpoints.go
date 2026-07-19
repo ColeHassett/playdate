@@ -20,6 +20,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/uptrace/bun"
 	"golang.org/x/crypto/bcrypt"
+
+	"uc181discord/games/bot/templ/pages"
 )
 
 var (
@@ -49,6 +51,10 @@ func StartAPI(db *bun.DB, dg *discordgo.Session) {
 		"relativeTime": RelativeTime,
 	})
 
+	// TODO: Testing templ rendering
+	ginHTMLRender := router.HTMLRender
+	router.HTMLRender = &HTMLTemplRenderer{FallbackHtmlRenderer: ginHTMLRender}
+
 	// Template Endpoints
 	router.LoadHTMLGlob(fmt.Sprintf("%s/**/*.html", Config.TemplateDirectory))
 	router.StaticFile("custom-colors.css", fmt.Sprintf("%s/custom-colors.css", Config.TemplateDirectory))
@@ -76,9 +82,12 @@ func StartAPI(db *bun.DB, dg *discordgo.Session) {
 	playdate.POST("/:id/maybe", api.setPlayDateAttendence)
 	playdate.POST("/:id/no", api.setPlayDateAttendence)
 
+	// NOTE: Example templ endpoint
+	router.GET("/test", api.Test)
+
 	go api.watchDog()
 
-	err := router.Run("0.0.0.0:8080")
+	err := router.Run("0.0.0.0:7777")
 	if err != nil {
 		log.Err(err).Msg("failed to start web server")
 	}
@@ -629,6 +638,11 @@ func (a *Api) handleOAuthCallback(c *gin.Context) {
 	}
 
 	a.createPlayDateCookie(c, player.SessionId)
+}
+
+func (a *Api) Test(c *gin.Context) {
+	r := New(c.Request.Context(), http.StatusOK, pages.Test())
+	c.Render(http.StatusOK, r)
 }
 
 func getGithubReleaseNotes() (g GitHubRelease) {

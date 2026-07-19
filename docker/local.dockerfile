@@ -1,5 +1,5 @@
 # Start by building the application.
-FROM golang:1.23 as builder
+FROM golang:1.25 as builder
 
 WORKDIR /app/
 COPY go.mod .
