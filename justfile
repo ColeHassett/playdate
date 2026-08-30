@@ -13,7 +13,7 @@ down:
 # basic format incase you editor doesn't
 fmt:
 	go fmt .
-	prettier . --write --plugin $(mise where npm:prettier-plugin-go-template)/lib/node_modules/prettier-plugin-go-template/lib/index.js
+	prettier . --write --plugin $(mise where npm:prettier-plugin-go-template)/node_modules/prettier-plugin-go-template/lib/index.js
 
 run:
 	go run server.go
