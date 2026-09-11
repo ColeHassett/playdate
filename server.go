@@ -36,10 +36,12 @@ func main() {
 
 	printBanner()
 	db := setupPostgresClient()
-	dg := setupDiscordClient()
-	internal.SetupDiscordHandlers(db, dg)
-	internal.SendPatchNotes(dg)
-
+	var dg *discordgo.Session
+	if internal.Config.DiscordEnabled {
+		dg := setupDiscordClient()
+		internal.SetupDiscordHandlers(db, dg)
+		internal.SendPatchNotes(dg)
+	}
 	// web server setup, pulled from graceful shutdown example: https://github.com/gin-gonic/examples/blob/master/graceful-shutdown/graceful-shutdown/notify-without-context/server.go
 	handler := internal.NewHandler(db, dg)
 	server := internal.NewServer(handler)

@@ -2,6 +2,7 @@ package internal
 
 import (
 	"os"
+	"strconv"
 
 	"github.com/rs/zerolog/log"
 )
@@ -29,6 +30,7 @@ type AppConfig struct {
 	PostgresUser      string
 	PostgresPassword  string
 	TemplateDirectory string
+	DiscordEnabled    bool // Controls if Discord is used or not.
 	DiscordConfig     *DiscordConfig
 }
 
@@ -43,6 +45,18 @@ func getOrDefault(name string, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+
+func getOrDefaultBool(name string, defaultValue bool) bool {
+	value, present := os.LookupEnv(name)
+	if !present {
+		return defaultValue
+	}
+	bValue, err := strconv.ParseBool(value)
+	if err != nil {
+		return defaultValue
+	}
+	return bValue
 }
 
 func newAppConfig() *AppConfig {
@@ -65,6 +79,7 @@ func newAppConfig() *AppConfig {
 		PostgresUser:      getOrDefault("POSTGRES_USER", "postgres"),
 		PostgresPassword:  getOrDefault("POSTGRES_PASSWORD", "postgres"),
 		TemplateDirectory: getOrDefault("TEMPLATE_DIRECTORY", "templates/"),
+		DiscordEnabled:    getOrDefaultBool("DISCORD_ENABLED", false),
 		DiscordConfig:     discordConfig,
 	}
 	return config
