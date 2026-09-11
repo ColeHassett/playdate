@@ -236,7 +236,7 @@ func (a *Api) createPlayDateTemplate(c *gin.Context) {
 
 	// send notification to configure channel to share the new playdate to the masses!
 	msg := fmt.Sprintf("Playdate %s at %s by %s! Check it out here: https://playdate.colinthatcher.dev/playdate/%d", playdate.Game, FormatTime(&playdate.Date), player.Name, playdate.ID)
-	dgMsg, err := a.dg.ChannelMessageSend(Config.DiscordConfig.ChannelID, msg)
+	dgMsg, err := sendChannelMessage(a.dg, Config.DiscordConfig.ChannelID, msg)
 	if err != nil {
 		log.Err(err).Any("playdate", playdate).Msg("failed to send message for new playdate to discord")
 	}
@@ -423,14 +423,15 @@ func (a *Api) registerUserTemplate(c *gin.Context) {
 		}
 	}
 
-	channel, err := a.dg.UserChannelCreate(discID)
+	channel, err := createUserChannel(a.dg, discID)
 	if err != nil {
 		log.Err(err).Any("player", player).Msg("failed to create private channel to send verification code")
 		formData["ServerError"] = "Invalid Discord ID"
 		c.HTML(http.StatusOK, "partials/register.html", formData)
 		return
 	}
-	_, err = a.dg.ChannelMessageSend(
+	_, err = sendChannelMessage(
+		a.dg,
 		channel.ID,
 		fmt.Sprintf("Here is your verification code from the PlayDate application!\n`%s`\nUse this to complete your signup/login.", player.VerificationCode),
 	)
@@ -519,7 +520,7 @@ func (a *Api) fetchPoppedDates() {
 			atAttendingPlayers = atAttendingPlayers + fmt.Sprintf("<@%s>", attendance.Player.DiscordID)
 		}
 		msg := fmt.Sprintf("Playdate %s created by <@%s> is happening now! Make sure to join :video_game:!\n%s", playdate.Game, playdate.Owner.DiscordID, atAttendingPlayers)
-		_, err = a.dg.ChannelMessageSend(Config.DiscordConfig.ChannelID, msg)
+		_, err = sendChannelMessage(a.dg, Config.DiscordConfig.ChannelID, msg)
 		if err != nil {
 			log.Err(err).Any("playdate", playdate).Msg("failed to send message for playdate")
 		}
@@ -657,16 +658,18 @@ func (a *Api) healthCheck(c *gin.Context) {
 		return
 	}
 
-	// Check Discord connection
-	_, err = a.dg.User("@me")
-	if err != nil {
-		log.Error().Err(err).Msg("Discord health check failed")
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "unhealthy",
-			"message": "Discord connection failed",
-			"error":   err.Error(),
-		})
-		return
+	if Config.DiscordEnabled {
+		// Check Discord connection
+		_, err = a.dg.User("@me")
+		if err != nil {
+			log.Error().Err(err).Msg("Discord health check failed")
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "unhealthy",
+				"message": "Discord connection failed",
+				"error":   err.Error(),
+			})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
