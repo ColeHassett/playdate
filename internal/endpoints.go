@@ -83,9 +83,9 @@ func NewHandler(db *bun.DB, dg *discordgo.Session) *gin.Engine {
 	playdate.GET("/", api.showPlayDateForm)
 	playdate.POST("/", api.createPlayDateTemplate)
 	playdate.GET("/:id", api.getPlayDateTemplate)
-	playdate.POST("/:id/yes", api.setPlayDateAttendence)
-	playdate.POST("/:id/maybe", api.setPlayDateAttendence)
-	playdate.POST("/:id/no", api.setPlayDateAttendence)
+	playdate.POST("/:id/yes", api.setPlayDateAttendance)
+	playdate.POST("/:id/maybe", api.setPlayDateAttendance)
+	playdate.POST("/:id/no", api.setPlayDateAttendance)
 
 	go api.watchDog()
 	return router
@@ -307,8 +307,8 @@ func (a *Api) getPlayDateTemplate(c *gin.Context) {
 	}
 }
 
-func (a *Api) setPlayDateAttendence(c *gin.Context) {
-	log.Debug().Msg("in setPlayDateAttendence")
+func (a *Api) setPlayDateAttendance(c *gin.Context) {
+	log.Debug().Msg("in setPlayDateAttendance")
 	player, err := GetPlayerFromContext(c)
 	if err != nil {
 		c.Redirect(http.StatusFound, "/")
