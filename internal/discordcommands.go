@@ -29,7 +29,7 @@ func SetupDiscordHandlers(db *bun.DB, dg *discordgo.Session) {
 
 	// Start discord reaction handlers
 	dg.AddHandler(func(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
-		setPlayDateAttendenceFromDisc(db, dg, r.MessageReaction)
+		setPlayDateAttendanceFromDisc(db, dg, r.MessageReaction)
 	})
 
 	_, err := dg.ApplicationCommandBulkOverwrite(dg.State.User.ID, Config.DiscordConfig.GuildID, commands)

@@ -83,9 +83,9 @@ func NewHandler(db *bun.DB, dg *discordgo.Session) *gin.Engine {
 	playdate.GET("/", api.showPlayDateForm)
 	playdate.POST("/", api.createPlayDateTemplate)
 	playdate.GET("/:id", api.getPlayDateTemplate)
-	playdate.POST("/:id/yes", api.setPlayDateAttendence)
-	playdate.POST("/:id/maybe", api.setPlayDateAttendence)
-	playdate.POST("/:id/no", api.setPlayDateAttendence)
+	playdate.POST("/:id/yes", api.setPlayDateAttendance)
+	playdate.POST("/:id/maybe", api.setPlayDateAttendance)
+	playdate.POST("/:id/no", api.setPlayDateAttendance)
 
 	go api.watchDog()
 	return router
@@ -307,8 +307,8 @@ func (a *Api) getPlayDateTemplate(c *gin.Context) {
 	}
 }
 
-func (a *Api) setPlayDateAttendence(c *gin.Context) {
-	log.Debug().Msg("in setPlayDateAttendence")
+func (a *Api) setPlayDateAttendance(c *gin.Context) {
+	log.Debug().Msg("in setPlayDateAttendance")
 	player, err := GetPlayerFromContext(c)
 	if err != nil {
 		c.Redirect(http.StatusFound, "/")
@@ -337,16 +337,23 @@ func (a *Api) setPlayDateAttendence(c *gin.Context) {
 		return
 	}
 
-	log.Info().Int("playdateID", playdate.ID).Int("playerID", player.ID).Any("action", attendance).Msg("attempting to set playdate attendance")
 	errors := map[string]string{}
-	rel := &model.PlayDateToPlayer{PlayDateID: playdate.ID, PlayerID: player.ID, Attending: attendance}
-	_, err = a.db.NewInsert().Model(rel).On("CONFLICT (playdate_id, player_id) DO UPDATE").Set("attending = EXCLUDED.attending").Exec(a.ctx)
-	if err != nil {
-		// send error back to user within the players-table.html
-		log.Error().Err(err).Interface("relation", rel).Msg("failed to insert playdate to player relation")
-		errors["PlayDatePlayers"] = err.Error()
+	state := templates.PlayDateState{}
+
+	if time.Now().After(playdate.Date) {
+		log.Warn().Msg("Playdate has already started")
+		errors["PlayDatePlayers"] = "Playdate has already started"
 	} else {
-		log.Info().Interface("relation", rel).Msg("successfully inserted playdate to player relation")
+		log.Info().Int("playdateID", playdate.ID).Int("playerID", player.ID).Any("action", attendance).Msg("attempting to set playdate attendance")
+		rel := &model.PlayDateToPlayer{PlayDateID: playdate.ID, PlayerID: player.ID, Attending: attendance}
+		_, err = a.db.NewInsert().Model(rel).On("CONFLICT (playdate_id, player_id) DO UPDATE").Set("attending = EXCLUDED.attending").Exec(a.ctx)
+		if err != nil {
+			// send error back to user within the players-table.html
+			log.Error().Err(err).Interface("relation", rel).Msg("failed to insert playdate to player relation")
+			errors["PlayDatePlayers"] = err.Error()
+		} else {
+			log.Info().Interface("relation", rel).Msg("successfully inserted playdate to player relation")
+		}
 	}
 
 	playdatePlayers := []*model.PlayDateToPlayer{}
@@ -357,7 +364,6 @@ func (a *Api) setPlayDateAttendence(c *gin.Context) {
 		errors["PlayDatePlayers"] = err.Error()
 	}
 
-	state := templates.PlayDateState{}
 	state.Errors = errors
 	state.PlayDatePlayers = playdatePlayers
 	state.PlayDate = playdate

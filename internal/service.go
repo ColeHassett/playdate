@@ -66,7 +66,7 @@ func getUserId(s *discordgo.Session, i *discordgo.InteractionCreate, db *bun.DB)
 	})
 }
 
-func setPlayDateAttendenceFromDisc(db *bun.DB, dg *discordgo.Session, r *discordgo.MessageReaction) {
+func setPlayDateAttendanceFromDisc(db *bun.DB, dg *discordgo.Session, r *discordgo.MessageReaction) {
 	ctx := context.TODO() // TODO: This should be a real context with like a 5s timeout?
 
 	if r.UserID == "1252426978313633812" {
