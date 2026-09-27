@@ -55,61 +55,72 @@ templ PlayDate(state PlayDateState) {
 					readonly:  true,
 				},
 			)
+			@PlayDateAttendance(state)
+			@PlayDateAttendanceError(state)
+			<br></br>
 			@PlayDateTable(state)
 		</div>
 	}
 }
 
-templ PlayDateTable(state PlayDateState) {
-	<div id="players-table">
+templ PlayDateAttendance(state PlayDateState) {
+	<div class="btn-group" role="group">
+		<button
+			type="button"
+			class="btn btn-primary"
+			hx-post={ fmt.Sprintf("/playdate/%d/yes", state.PlayDate.ID) }
+			hx-target="#players-table"
+			hx-swap="outerHTML"
+		>
+			Sign up
+		</button>
+		<button
+			type="button"
+			class="btn btn-secondary"
+			hx-post={ fmt.Sprintf("/playdate/%d/maybe", state.PlayDate.ID) }
+			hx-target="#players-table"
+			hx-swap="outerHTML"
+		>
+			Maybe
+		</button>
+		<button
+			type="button"
+			class="btn btn-danger"
+			hx-post={ fmt.Sprintf("/playdate/%d/no", state.PlayDate.ID) }
+			hx-target="#players-table"
+			hx-swap="outerHTML"
+		>
+			No
+		</button>
+	</div>
+}
+
+templ PlayDateAttendanceError(state PlayDateState) {
+	<div id="playdate-attendance-error">
 		if len(state.Errors) > 0 {
 			if errPlayDatePlayers, ok := state.Errors["PlayDatePlayers"]; ok {
-				<span>{ errPlayDatePlayers }</span>
+				{ errPlayDatePlayers }
 			}
 		}
-		<table
-			class="table table-striped table-hover table-responsive"
-		>
-			<thead>
-				<tr>
-					<th scope="col">Name</th>
-					<th scope="col">Attendence</th>
-					<th scope="col">
-						<div class="btn-group" role="group">
-							<button
-								type="button"
-								class="btn btn-primary"
-								hx-post={ fmt.Sprintf("/playdate/%d/yes", state.PlayDate.ID) }
-								hx-target="#players-table"
-								hx-swap="outerHTML"
-							>
-								Sign up
-							</button>
-							<button
-								type="button"
-								class="btn btn-secondary"
-								hx-post={ fmt.Sprintf("/playdate/%d/maybe", state.PlayDate.ID) }
-								hx-target="#players-table"
-								hx-swap="outerHTML"
-							>
-								Maybe
-							</button>
-							<button
-								type="button"
-								class="btn btn-danger"
-								hx-post={ fmt.Sprintf("/playdate/%d/no", state.PlayDate.ID) }
-								hx-target="#players-table"
-								hx-swap="outerHTML"
-							>
-								No
-							</button>
-						</div>
-					</th>
-				</tr>
-			</thead>
-			<tbody>
-				if len(state.PlayDatePlayers) > 0 {
-					for _, player := range state.PlayDatePlayers {
+	</div>
+}
+
+templ PlayDateTable(state PlayDateState) {
+	<table
+		id="players-table"
+		class="table table-striped table-hover table-responsive"
+	>
+		<thead>
+			<tr>
+				<th scope="col">Name</th>
+				<th scope="col">Attendence</th>
+				<th scope="col">
+				</th>
+			</tr>
+		</thead>
+		<tbody>
+			if len(state.PlayDatePlayers) > 0 {
+				for _, player := range state.PlayDatePlayers {
 						<tr>
 							<td scope="row">{ player.Player.Name }</td>
 							<td scope="row">{ player.Attending }</td>
@@ -118,19 +129,17 @@ templ PlayDateTable(state PlayDateState) {
 							</td>
 						</tr>
 					}
-				} else {
-					<tr>
-						<td scope="row">No players are signed up yet.. T.T</td>
-						<td>
-							<!-- Add a cell to align with the header buttons -->
-						</td>
-						<td>
-							<!-- Add a cell to align with the header buttons -->
-						</td>
-					</tr>
-				}
-			</tbody>
-		</table>
-
-	</div>
+			} else {
+				<tr>
+					<td scope="row">No players are signed up yet.. T.T</td>
+					<td>
+						<!-- Add a cell to align with the header buttons -->
+					</td>
+					<td>
+						<!-- Add a cell to align with the header buttons -->
+					</td>
+				</tr>
+			}
+		</tbody>
+	</table>
 }
