@@ -343,6 +343,10 @@ func (a *Api) setPlayDateAttendance(c *gin.Context) {
 	if time.Now().After(playdate.Date) {
 		log.Warn().Msg("Playdate has already started")
 		errors["PlayDatePlayers"] = "Playdate has already started"
+		c.Header("HX-Retarget", "#playdate-attendance-error")
+		state.Errors = errors
+		renderTempl(c, http.StatusOK, templates.PlayDateAttendanceError(state))
+		return
 	} else {
 		log.Info().Int("playdateID", playdate.ID).Int("playerID", player.ID).Any("action", attendance).Msg("attempting to set playdate attendance")
 		rel := &model.PlayDateToPlayer{PlayDateID: playdate.ID, PlayerID: player.ID, Attending: attendance}
